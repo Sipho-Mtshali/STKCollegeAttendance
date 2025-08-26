@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STK College - Online Attendance System</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="login-wrapper">
+            <div class="login-card">
+                <div class="logo-section">
+                    <div class="logo">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    <h1>STK College</h1>
+                    <p>Smart Attendance Management System</p>
+                </div>
+
+                <form id="loginForm" class="login-form">
+                    <div class="input-group">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="email" placeholder="Enter your email" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" placeholder="Enter your password" required>
+                        <i class="fas fa-eye toggle-password" onclick="togglePassword()"></i>
+                    </div>
+
+                    <div class="role-selection">
+                        <label class="radio-container">
+                            <input type="radio" name="role" value="teacher" checked>
+                            <span class="radio-checkmark"></span>
+                            <i class="fas fa-chalkboard-teacher"></i>
+                            Teacher
+                        </label>
+                        <label class="radio-container">
+                            <input type="radio" name="role" value="student">
+                            <span class="radio-checkmark"></span>
+                            <i class="fas fa-user-graduate"></i>
+                            Student
+                        </label>
+                    </div>
+
+                    <button type="submit" class="login-btn">
+                        <span class="btn-text">Sign In</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </form>
+
+                <div class="loading-spinner" id="loadingSpinner">
+                    <div class="spinner"></div>
+                    <p>Signing you in...</p>
+                </div>
+
+                <div class="error-message" id="errorMessage"></div>
+            </div>
+
+            <!--<div class="features-section">
+                <h3>Why Choose STK College?</h3>
+                <div class="feature">
+                    <i class="fas fa-shield-alt"></i>
+                    <div>
+                        <h4>Secure & Reliable</h4>
+                        <p>Advanced authentication and data protection</p>
+                    </div>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-clock"></i>
+                    <div>
+                        <h4>Real-time Updates</h4>
+                        <p>Instant attendance tracking and notifications</p>
+                    </div>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-download"></i>
+                    <div>
+                        <h4>PDF Export</h4>
+                        <p>Download attendance reports instantly</p>
+                    </div>
+                </div>
+            </div>-->
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    
+    <!-- App Scripts -->
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

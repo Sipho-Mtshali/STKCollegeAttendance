@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard - STK College</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <i class="fas fa-graduation-cap"></i>
+                <span>STK College</span>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="teacherName">Welcome, Teacher</span>
+                </div>
+                <button class="logout-btn" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="dashboard-grid">
+            <!-- Stats Cards -->
+            <div class="stats-section">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="totalStudents">0</h3>
+                        <p>Total Students</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="pendingRequests">0</h3>
+                        <p>Pending Requests</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="todayApproved">0</h3>
+                        <p>Today's Approved</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Student Section -->
+            <div class="card add-student-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-user-plus"></i> Add New Student</h2>
+                </div>
+                <form id="addStudentForm" class="add-student-form">
+                    <div class="form-row">
+                        <div class="input-group">
+                            <label for="studentName">Full Name</label>
+                            <input type="text" id="studentName" placeholder="Enter student's full name" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="studentId">Student ID</label>
+                            <input type="text" id="studentId" placeholder="Enter student ID" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="input-group">
+                            <label for="studentEmail">Email Address</label>
+                            <input type="email" id="studentEmail" placeholder="Enter email address" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="studentPassword">Password</label>
+                            <input type="password" id="studentPassword" placeholder="Create password" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="add-btn">
+                        <i class="fas fa-plus"></i>
+                        Add Student
+                    </button>
+                </form>
+            </div>
+
+            <!-- Pending Attendance Section -->
+            <div class="card pending-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-clock"></i> Pending Attendance Requests</h2>
+                    <div class="header-actions">
+                        <button class="refresh-btn" onclick="loadPendingAttendance()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="export-btn" onclick="exportToPDF()">
+                            <i class="fas fa-file-pdf"></i>
+                            Export PDF
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Student ID</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendingTableBody">
+                            <tr class="no-data">
+                                <td colspan="6">
+                                    <i class="fas fa-inbox"></i>
+                                    <p>No pending requests</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card activity-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-history"></i> Recent Activity</h2>
+                </div>
+                <div class="activity-list" id="activityList">
+                    <div class="activity-item">
+                        <div class="activity-icon">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div class="activity-content">
+                            <p>Welcome to STK College! Start by adding students.</p>
+                            <span class="activity-time">Just now</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Success/Error Notifications -->
+    <div class="notification" id="notification"></div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    
+    <!-- PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- App Scripts -->
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script src="teacher.js"></script>
+    <script src="pdf.js"></script>
+</body>
+</html>

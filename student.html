@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - STK College</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <i class="fas fa-graduation-cap"></i>
+                <span>STK College</span>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="studentName">Welcome, Student</span>
+                </div>
+                <button class="logout-btn" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="student-dashboard">
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+                <div class="action-card mark-attendance-card">
+                    <div class="action-icon">
+                        <i class="fas fa-hand-paper"></i>
+                    </div>
+                    <h3>Mark Attendance</h3>
+                    <p>Click to mark your attendance for today</p>
+                    <button id="markAttendanceBtn" class="mark-btn" onclick="markAttendance()">
+                        <i class="fas fa-check"></i>
+                        Mark Present
+                    </button>
+                    <div class="attendance-status" id="attendanceStatus"></div>
+                </div>
+
+                <div class="action-card stats-card">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <h4 id="totalDays">0</h4>
+                            <p>Total Days</p>
+                        </div>
+                        <div class="stat-item">
+                            <h4 id="presentDays">0</h4>
+                            <p>Present</p>
+                        </div>
+                        <div class="stat-item">
+                            <h4 id="absentDays">0</h4>
+                            <p>Absent</p>
+                        </div>
+                        <div class="stat-item">
+                            <h4 id="attendancePercentage">0%</h4>
+                            <p>Attendance Rate</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance History -->
+            <div class="card history-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-history"></i> Attendance History</h2>
+                    <div class="filter-section">
+                        <select id="statusFilter" onchange="filterAttendance()">
+                            <option value="all">All Status</option>
+                            <option value="approved">Approved</option>
+                            <option value="pending">Pending</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Time Marked</th>
+                                <th>Status</th>
+                                <th>Approved By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr class="no-data">
+                                <td colspan="4">
+                                    <i class="fas fa-calendar-times"></i>
+                                    <p>No attendance records found</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Today's Schedule -->
+            <div class="card schedule-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-calendar-day"></i> Today's Information</h2>
+                </div>
+                <div class="schedule-content">
+                    <div class="date-info">
+                        <div class="current-date">
+                            <i class="fas fa-calendar"></i>
+                            <span id="currentDate"></span>
+                        </div>
+                        <div class="current-time">
+                            <i class="fas fa-clock"></i>
+                            <span id="currentTime"></span>
+                        </div>
+                    </div>
+                    <div class="attendance-reminder">
+                        <i class="fas fa-bell"></i>
+                        <p>Don't forget to mark your attendance today!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Success/Error Notifications -->
+    <div class="notification" id="notification"></div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    
+    <!-- App Scripts -->
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+    <script src="student.js"></script>
+</body>
+</html>
