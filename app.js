@@ -1,240 +1,352 @@
+// app.js - Main Firebase configuration and shared logic
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, getDoc, collection, addDoc, updateDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { firebaseConfig } from './firebase-config.js';
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
 // Global variables
 let currentUser = null;
 let userRole = null;
 
-// Utility Functions
+// Auth state observer
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        currentUser = user;
+        await getUserRole();
+    } else {
+        currentUser = null;
+        userRole = null;
+        // Redirect to login if not on login page
+        if (!window.location.pathname.includes('index.html') && window.location.pathname !== '/') {
+            window.location.href = 'index.html';
+        }
+    }
+});
+
+// Get user role from Firestore
+async function getUserRole() {
+    try {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        if (userDoc.exists()) {
+            userRole = userDoc.data().role;
+            // Redirect based on role if on login page
+            if (window.location.pathname.includes('index.html') || window.location.pathname === '/') {
+                if (userRole === 'teacher') {
+                    window.location.href = 'teacher.html';
+                } else if (userRole === 'student') {
+                    window.location.href = 'student.html';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error getting user role:', error);
+        showNotification('Error fetching user data', 'error');
+    }
+}
+
+// Login function
+async function login(email, password) {
+    try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        showNotification('Login successful!', 'success');
+        return userCredential.user;
+    } catch (error) {
+        console.error('Login error:', error);
+        let errorMessage = 'Login failed. ';
+        switch (error.code) {
+            case 'auth/user-not-found':
+                errorMessage += 'No account found with this email.';
+                break;
+            case 'auth/wrong-password':
+                errorMessage += 'Incorrect password.';
+                break;
+            case 'auth/invalid-email':
+                errorMessage += 'Invalid email format.';
+                break;
+            case 'auth/too-many-requests':
+                errorMessage += 'Too many failed attempts. Try again later.';
+                break;
+            default:
+                errorMessage += error.message;
+        }
+        showNotification(errorMessage, 'error');
+        throw error;
+    }
+}
+
+// Logout function
+async function logout() {
+    try {
+        await signOut(auth);
+        showNotification('Logged out successfully', 'success');
+        window.location.href = 'index.html';
+    } catch (error) {
+        console.error('Logout error:', error);
+        showNotification('Error logging out', 'error');
+    }
+}
+
+// Mark attendance (for students)
+async function markAttendance() {
+    if (!currentUser || userRole !== 'student') {
+        showNotification('Unauthorized action', 'error');
+        return;
+    }
+
+    try {
+        // Check if already marked today
+        const today = new Date().toDateString();
+        const q = query(
+            collection(db, 'attendance'),
+            where('studentId', '==', currentUser.uid),
+            where('date', '==', today)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            showNotification('Attendance already marked for today', 'warning');
+            return;
+        }
+
+        // Create attendance record
+        await addDoc(collection(db, 'attendance'), {
+            studentId: currentUser.uid,
+            studentEmail: currentUser.email,
+            date: today,
+            timestamp: new Date(),
+            status: 'pending'
+        });
+
+        showNotification('Attendance marked successfully! Waiting for teacher approval.', 'success');
+        loadStudentAttendance(); // Refresh the attendance list
+    } catch (error) {
+        console.error('Error marking attendance:', error);
+        showNotification('Error marking attendance', 'error');
+    }
+}
+
+// Load student attendance records
+async function loadStudentAttendance() {
+    if (!currentUser || userRole !== 'student') return;
+
+    try {
+        const q = query(
+            collection(db, 'attendance'),
+            where('studentId', '==', currentUser.uid),
+            orderBy('timestamp', 'desc')
+        );
+
+        const querySnapshot = await getDocs(q);
+        const attendanceTableBody = document.getElementById('attendance-table-body');
+        
+        if (!attendanceTableBody) return;
+
+        attendanceTableBody.innerHTML = '';
+
+        if (querySnapshot.empty) {
+            attendanceTableBody.innerHTML = '<tr><td colspan="3" class="no-data">No attendance records found</td></tr>';
+            return;
+        }
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const row = document.createElement('tr');
+            
+            const statusClass = data.status === 'approved' ? 'status-approved' : 
+                              data.status === 'rejected' ? 'status-rejected' : 'status-pending';
+            
+            row.innerHTML = `
+                <td>${data.date}</td>
+                <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
+                <td><span class="status ${statusClass}">${data.status.toUpperCase()}</span></td>
+            `;
+            attendanceTableBody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading attendance:', error);
+        showNotification('Error loading attendance records', 'error');
+    }
+}
+
+// Load pending attendance for teachers
+async function loadPendingAttendance() {
+    if (!currentUser || userRole !== 'teacher') return;
+
+    try {
+        const q = query(
+            collection(db, 'attendance'),
+            where('status', '==', 'pending'),
+            orderBy('timestamp', 'desc')
+        );
+
+        const querySnapshot = await getDocs(q);
+        const pendingTableBody = document.getElementById('pending-table-body');
+        
+        if (!pendingTableBody) return;
+
+        pendingTableBody.innerHTML = '';
+
+        if (querySnapshot.empty) {
+            pendingTableBody.innerHTML = '<tr><td colspan="5" class="no-data">No pending attendance requests</td></tr>';
+            return;
+        }
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const row = document.createElement('tr');
+            
+            row.innerHTML = `
+                <td>${data.studentEmail}</td>
+                <td>${data.date}</td>
+                <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
+                <td><span class="status status-pending">PENDING</span></td>
+                <td class="action-buttons">
+                    <button class="btn-approve" onclick="approveAttendance('${doc.id}')">Approve</button>
+                    <button class="btn-reject" onclick="rejectAttendance('${doc.id}')">Reject</button>
+                </td>
+            `;
+            pendingTableBody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading pending attendance:', error);
+        showNotification('Error loading pending attendance', 'error');
+    }
+}
+
+// Approve attendance
+async function approveAttendance(docId) {
+    try {
+        await updateDoc(doc(db, 'attendance', docId), {
+            status: 'approved',
+            approvedAt: new Date(),
+            approvedBy: currentUser.uid
+        });
+        showNotification('Attendance approved successfully', 'success');
+        loadPendingAttendance();
+    } catch (error) {
+        console.error('Error approving attendance:', error);
+        showNotification('Error approving attendance', 'error');
+    }
+}
+
+// Reject attendance
+async function rejectAttendance(docId) {
+    try {
+        await updateDoc(doc(db, 'attendance', docId), {
+            status: 'rejected',
+            rejectedAt: new Date(),
+            rejectedBy: currentUser.uid
+        });
+        showNotification('Attendance rejected successfully', 'success');
+        loadPendingAttendance();
+    } catch (error) {
+        console.error('Error rejecting attendance:', error);
+        showNotification('Error rejecting attendance', 'error');
+    }
+}
+
+// Show notification
 function showNotification(message, type = 'info') {
-    const notification = document.getElementById('notification');
+    // Remove existing notifications
+    const existingNotifications = document.querySelectorAll('.notification');
+    existingNotifications.forEach(notification => notification.remove());
+
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
     notification.textContent = message;
-    notification.className = `notification ${type} show`;
-    
+
+    // Add to page
+    document.body.appendChild(notification);
+
+    // Auto remove after 4 seconds
     setTimeout(() => {
-        notification.classList.remove('show');
+        if (notification.parentNode) {
+            notification.remove();
+        }
     }, 4000);
 }
 
+// Format date for display
 function formatDate(date) {
     return date.toLocaleDateString('en-US', {
         year: 'numeric',
-        month: 'long',
+        month: 'short',
         day: 'numeric'
     });
 }
 
+// Format time for display
 function formatTime(date) {
     return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: true
     });
 }
 
-// Authentication Functions
-function togglePassword() {
-    const passwordInput = document.getElementById('password');
-    const toggleIcon = document.querySelector('.toggle-password');
+// Initialize page based on current page
+document.addEventListener('DOMContentLoaded', function() {
+    const currentPage = window.location.pathname.split('/').pop();
     
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleIcon.classList.remove('fa-eye');
-        toggleIcon.classList.add('fa-eye-slash');
-    } else {
-        passwordInput.type = 'password';
-        toggleIcon.classList.remove('fa-eye-slash');
-        toggleIcon.classList.add('fa-eye');
+    // Set up login form if on index page
+    if (currentPage === 'index.html' || currentPage === '') {
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                
+                const loginBtn = document.getElementById('login-btn');
+                const originalText = loginBtn.textContent;
+                loginBtn.textContent = 'Signing in...';
+                loginBtn.disabled = true;
+                
+                try {
+                    await login(email, password);
+                } catch (error) {
+                    // Error is already handled in login function
+                } finally {
+                    loginBtn.textContent = originalText;
+                    loginBtn.disabled = false;
+                }
+            });
+        }
     }
-}
-
-function showLoading(show = true) {
-    const form = document.getElementById('loginForm');
-    const spinner = document.getElementById('loadingSpinner');
     
-    if (show) {
-        form.style.display = 'none';
-        spinner.style.display = 'block';
-    } else {
-        form.style.display = 'flex';
-        spinner.style.display = 'none';
+    // Set up logout buttons
+    const logoutBtns = document.querySelectorAll('.logout-btn');
+    logoutBtns.forEach(btn => {
+        btn.addEventListener('click', logout);
+    });
+
+    // Set up mark attendance button for students
+    const markAttendanceBtn = document.getElementById('mark-attendance-btn');
+    if (markAttendanceBtn) {
+        markAttendanceBtn.addEventListener('click', markAttendance);
     }
-}
 
-function showError(message) {
-    const errorDiv = document.getElementById('errorMessage');
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
-    
+    // Load data based on page
     setTimeout(() => {
-        errorDiv.style.display = 'none';
-    }, 5000);
-}
-
-// Login Form Handler
-if (document.getElementById('loginForm')) {
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const role = document.querySelector('input[name="role"]:checked').value;
-        
-        showLoading(true);
-        
-        try {
-            // Sign in with Firebase Auth
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
-            const user = userCredential.user;
-            
-            // Check user role in Firestore
-            const userDoc = await db.collection('users').doc(user.uid).get();
-            
-            if (!userDoc.exists) {
-                throw new Error('User profile not found');
-            }
-            
-            const userData = userDoc.data();
-            
-            // Verify role matches selection
-            if (userData.role !== role) {
-                throw new Error(`You are not registered as a ${role}`);
-            }
-            
-            // Redirect based on role
-            if (role === 'teacher') {
-                window.location.href = 'teacher.html';
-            } else {
-                window.location.href = 'student.html';
-            }
-            
-        } catch (error) {
-            showLoading(false);
-            let errorMessage = 'Login failed. Please try again.';
-            
-            switch (error.code) {
-                case 'auth/user-not-found':
-                    errorMessage = 'No account found with this email';
-                    break;
-                case 'auth/wrong-password':
-                    errorMessage = 'Incorrect password';
-                    break;
-                case 'auth/invalid-email':
-                    errorMessage = 'Invalid email address';
-                    break;
-                case 'auth/too-many-requests':
-                    errorMessage = 'Too many failed attempts. Try again later';
-                    break;
-                default:
-                    errorMessage = error.message;
-            }
-            
-            showError(errorMessage);
+        if (currentPage === 'student.html' && currentUser && userRole === 'student') {
+            loadStudentAttendance();
+        } else if (currentPage === 'teacher.html' && currentUser && userRole === 'teacher') {
+            loadPendingAttendance();
         }
-    });
-}
-
-// Auth State Observer
-auth.onAuthStateChanged(async (user) => {
-    if (user) {
-        currentUser = user;
-        
-        // Get user role from Firestore
-        try {
-            const userDoc = await db.collection('users').doc(user.uid).get();
-            if (userDoc.exists) {
-                userRole = userDoc.data().role;
-                
-                // Update UI with user name
-                const userName = userDoc.data().name || user.email;
-                const nameElement = document.getElementById('teacherName') || 
-                                  document.getElementById('studentName');
-                if (nameElement) {
-                    nameElement.textContent = `Welcome, ${userName}`;
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching user data:', error);
-        }
-        
-    } else {
-        currentUser = null;
-        userRole = null;
-        
-        // Redirect to login if not on login page
-        if (!window.location.pathname.includes('index.html') && 
-            !window.location.pathname.endsWith('/')) {
-            window.location.href = 'index.html';
-        }
-    }
+    }, 1000);
 });
 
-// Logout Function
-function logout() {
-    auth.signOut().then(() => {
-        showNotification('Logged out successfully', 'success');
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 1000);
-    }).catch((error) => {
-        showNotification('Error logging out', 'error');
-        console.error('Logout error:', error);
-    });
-}
-
-// Page Load Handlers
-document.addEventListener('DOMContentLoaded', () => {
-    // Check authentication state on dashboard pages
-    if (window.location.pathname.includes('teacher.html') || 
-        window.location.pathname.includes('student.html')) {
-        
-        auth.onAuthStateChanged(async (user) => {
-            if (!user) {
-                window.location.href = 'index.html';
-                return;
-            }
-            
-            try {
-                const userDoc = await db.collection('users').doc(user.uid).get();
-                if (!userDoc.exists) {
-                    throw new Error('User profile not found');
-                }
-                
-                const userData = userDoc.data();
-                const expectedRole = window.location.pathname.includes('teacher.html') ? 'teacher' : 'student';
-                
-                if (userData.role !== expectedRole) {
-                    window.location.href = 'index.html';
-                    return;
-                }
-                
-                // Initialize page-specific functionality
-                if (expectedRole === 'teacher') {
-                    initTeacherDashboard();
-                } else {
-                    initStudentDashboard();
-                }
-                
-            } catch (error) {
-                console.error('Error verifying user:', error);
-                window.location.href = 'index.html';
-            }
-        });
-    }
-    
-    // Update current time on student page
-    if (document.getElementById('currentTime')) {
-        updateCurrentTime();
-        setInterval(updateCurrentTime, 1000);
-    }
-    
-    // Set current date on student page
-    if (document.getElementById('currentDate')) {
-        document.getElementById('currentDate').textContent = formatDate(new Date());
-    }
-});
-
-function updateCurrentTime() {
-    const timeElement = document.getElementById('currentTime');
-    if (timeElement) {
-        timeElement.textContent = formatTime(new Date());
-    }
-}
-
-// Initialize dashboard functions (will be called from respective JS files)
+// Export functions for global use
+window.login = login;
+window.logout = logout;
+window.markAttendance = markAttendance;
+window.approveAttendance = approveAttendance;
+window.rejectAttendance = rejectAttendance;
+window.loadStudentAttendance = loadStudentAttendance;
+window.loadPendingAttendance = loadPendingAttendance;
