@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Admin - EduTrack</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="login-card" style="max-width: 500px; margin: 0 auto;">
+            <div class="logo-section">
+                <div class="logo">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <h1>Setup Admin Account</h1>
+                <p>Create your teacher/admin account to get started</p>
+            </div>
+
+            <form id="setupForm" class="login-form">
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="adminName" placeholder="Enter admin name" required>
+                </div>
+
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="adminEmail" placeholder="Enter admin email" required>
+                </div>
+                
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="adminPassword" placeholder="Create password (min 6 chars)" required minlength="6">
+                    <i class="fas fa-eye toggle-password" onclick="toggleSetupPassword()"></i>
+                </div>
+
+                <button type="submit" class="login-btn">
+                    <span class="btn-text">Create Admin Account</span>
+                    <i class="fas fa-user-plus"></i>
+                </button>
+            </form>
+
+            <div class="loading-spinner" id="loadingSpinner">
+                <div class="spinner"></div>
+                <p>Creating admin account...</p>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+            
+            <div class="success-message" id="successMessage" style="display: none; background: #d4edda; color: #155724; padding: 12px 16px; border-radius: 8px; margin-top: 16px; border-left: 4px solid #28a745;">
+                <i class="fas fa-check-circle"></i>
+                <span>Admin account created successfully! Redirecting to login...</span>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background: rgba(255, 138, 0, 0.1); border-radius: 8px; border-left: 4px solid #ff8a00;">
+                <h4 style="margin: 0 0 10px 0; color: #ff8a00;">
+                    <i class="fas fa-info-circle"></i> Instructions:
+                </h4>
+                <ul style="margin: 0; padding-left: 20px; color: #666; font-size: 14px;">
+                    <li>This will create your teacher/admin account</li>
+                    <li>Use this account to login and add students</li>
+                    <li>You can delete this setup page after creating admin</li>
+                    <li>Make sure Firebase is properly configured</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    
+    <script src="firebase-config.js"></script>
+    
+    <script>
+        function toggleSetupPassword() {
+            const passwordInput = document.getElementById('adminPassword');
+            const toggleIcon = document.querySelector('.toggle-password');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+
+        function showLoading(show = true) {
+            const form = document.getElementById('setupForm');
+            const spinner = document.getElementById('loadingSpinner');
+            
+            if (show) {
+                form.style.display = 'none';
+                spinner.style.display = 'block';
+            } else {
+                form.style.display = 'flex';
+                spinner.style.display = 'none';
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 8000);
+        }
+
+        function showSuccess() {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.style.display = 'block';
+        }
+
+        document.getElementById('setupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('adminName').value.trim();
+            const email = document.getElementById('adminEmail').value.trim();
+            const password = document.getElementById('adminPassword').value;
+            
+            if (!name || !email || !password) {
+                showError('Please fill all fields');
+                return;
+            }
+
+            if (password.length < 6) {
+                showError('Password must be at least 6 characters');
+                return;
+            }
+            
+            showLoading(true);
+            
+            try {
+                // Create admin user
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                // Add user data to Firestore
+                await db.collection('users').doc(user.uid).set({
+                    email: email,
+                    name: name,
+                    role: 'teacher',
+                    isAdmin: true,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                showLoading(false);
+                showSuccess();
+                
+                // Redirect to login page after 3 seconds
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 3000);
+                
+            } catch (error) {
+                showLoading(false);
+                console.error('Error creating admin:', error);
+                
+                let errorMessage = 'Failed to create admin account';
+                
+                switch (error.code) {
+                    case 'auth/email-already-in-use':
+                        errorMessage = 'Email is already registered. Try logging in instead.';
+                        break;
+                    case 'auth/weak-password':
+                        errorMessage = 'Password is too weak. Use at least 6 characters.';
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = 'Invalid email address format';
+                        break;
+                    case 'auth/operation-not-allowed':
+                        errorMessage = 'Email/password authentication is not enabled in Firebase';
+                        break;
+                    default:
+                        errorMessage = error.message;
+                }
+                
+                showError(errorMessage);
+            }
+        });
+
+        // Check if admin already exists
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                // Check if user is admin
+                try {
+                    const userDoc = await db.collection('users').doc(user.uid).get();
+                    if (userDoc.exists && userDoc.data().role === 'teacher') {
+                        // Admin already exists, redirect to teacher dashboard
+                        window.location.href = 'teacher.html';
+                    }
+                } catch (error) {
+                    console.error('Error checking user:', error);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,240 +1,381 @@
-// Global variables
-let currentUser = null;
-let userRole = null;
+// Teacher Dashboard Functions
+let studentsData = [];
+let attendanceData = [];
 
-// Utility Functions
-function showNotification(message, type = 'info') {
-    const notification = document.getElementById('notification');
-    notification.textContent = message;
-    notification.className = `notification ${type} show`;
-    
-    setTimeout(() => {
-        notification.classList.remove('show');
-    }, 4000);
+function initTeacherDashboard() {
+    loadStats();
+    loadPendingAttendance();
+    loadRecentActivity();
+    setupAddStudentForm();
+    setupRealtimeListeners();
 }
 
-function formatDate(date) {
-    return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-}
-
-function formatTime(date) {
-    return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-// Authentication Functions
-function togglePassword() {
-    const passwordInput = document.getElementById('password');
-    const toggleIcon = document.querySelector('.toggle-password');
-    
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleIcon.classList.remove('fa-eye');
-        toggleIcon.classList.add('fa-eye-slash');
-    } else {
-        passwordInput.type = 'password';
-        toggleIcon.classList.remove('fa-eye-slash');
-        toggleIcon.classList.add('fa-eye');
+// Add Student Functionality
+function setupAddStudentForm() {
+    const form = document.getElementById('addStudentForm');
+    if (form) {
+        form.addEventListener('submit', addStudent);
     }
 }
 
-function showLoading(show = true) {
-    const form = document.getElementById('loginForm');
-    const spinner = document.getElementById('loadingSpinner');
+async function addStudent(e) {
+    e.preventDefault();
     
-    if (show) {
-        form.style.display = 'none';
-        spinner.style.display = 'block';
-    } else {
-        form.style.display = 'flex';
-        spinner.style.display = 'none';
-    }
-}
-
-function showError(message) {
-    const errorDiv = document.getElementById('errorMessage');
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
+    const name = document.getElementById('studentName').value.trim();
+    const studentId = document.getElementById('studentId').value.trim();
+    const email = document.getElementById('studentEmail').value.trim();
+    const password = document.getElementById('studentPassword').value;
     
-    setTimeout(() => {
-        errorDiv.style.display = 'none';
-    }, 5000);
-}
-
-// Login Form Handler
-if (document.getElementById('loginForm')) {
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const role = document.querySelector('input[name="role"]:checked').value;
-        
-        showLoading(true);
-        
-        try {
-            // Sign in with Firebase Auth
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
-            const user = userCredential.user;
-            
-            // Check user role in Firestore
-            const userDoc = await db.collection('users').doc(user.uid).get();
-            
-            if (!userDoc.exists) {
-                throw new Error('User profile not found');
-            }
-            
-            const userData = userDoc.data();
-            
-            // Verify role matches selection
-            if (userData.role !== role) {
-                throw new Error(`You are not registered as a ${role}`);
-            }
-            
-            // Redirect based on role
-            if (role === 'teacher') {
-                window.location.href = 'teacher.html';
-            } else {
-                window.location.href = 'student.html';
-            }
-            
-        } catch (error) {
-            showLoading(false);
-            let errorMessage = 'Login failed. Please try again.';
-            
-            switch (error.code) {
-                case 'auth/user-not-found':
-                    errorMessage = 'No account found with this email';
-                    break;
-                case 'auth/wrong-password':
-                    errorMessage = 'Incorrect password';
-                    break;
-                case 'auth/invalid-email':
-                    errorMessage = 'Invalid email address';
-                    break;
-                case 'auth/too-many-requests':
-                    errorMessage = 'Too many failed attempts. Try again later';
-                    break;
-                default:
-                    errorMessage = error.message;
-            }
-            
-            showError(errorMessage);
-        }
-    });
-}
-
-// Auth State Observer
-auth.onAuthStateChanged(async (user) => {
-    if (user) {
-        currentUser = user;
-        
-        // Get user role from Firestore
-        try {
-            const userDoc = await db.collection('users').doc(user.uid).get();
-            if (userDoc.exists) {
-                userRole = userDoc.data().role;
-                
-                // Update UI with user name
-                const userName = userDoc.data().name || user.email;
-                const nameElement = document.getElementById('teacherName') || 
-                                  document.getElementById('studentName');
-                if (nameElement) {
-                    nameElement.textContent = `Welcome, ${userName}`;
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching user data:', error);
-        }
-        
-    } else {
-        currentUser = null;
-        userRole = null;
-        
-        // Redirect to login if not on login page
-        if (!window.location.pathname.includes('index.html') && 
-            !window.location.pathname.endsWith('/')) {
-            window.location.href = 'index.html';
-        }
+    if (!name || !studentId || !email || !password) {
+        showNotification('Please fill all fields', 'error');
+        return;
     }
-});
-
-// Logout Function
-function logout() {
-    auth.signOut().then(() => {
-        showNotification('Logged out successfully', 'success');
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 1000);
-    }).catch((error) => {
-        showNotification('Error logging out', 'error');
-        console.error('Logout error:', error);
-    });
-}
-
-// Page Load Handlers
-document.addEventListener('DOMContentLoaded', () => {
-    // Check authentication state on dashboard pages
-    if (window.location.pathname.includes('teacher.html') || 
-        window.location.pathname.includes('student.html')) {
+    
+    const addBtn = document.querySelector('.add-btn');
+    const originalText = addBtn.innerHTML;
+    addBtn.classList.add('loading');
+    addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding Student...';
+    
+    try {
+        console.log('Starting student creation process...');
         
-        auth.onAuthStateChanged(async (user) => {
-            if (!user) {
-                window.location.href = 'index.html';
-                return;
-            }
-            
-            try {
-                const userDoc = await db.collection('users').doc(user.uid).get();
-                if (!userDoc.exists) {
-                    throw new Error('User profile not found');
-                }
-                
-                const userData = userDoc.data();
-                const expectedRole = window.location.pathname.includes('teacher.html') ? 'teacher' : 'student';
-                
-                if (userData.role !== expectedRole) {
-                    window.location.href = 'index.html';
-                    return;
-                }
-                
-                // Initialize page-specific functionality
-                if (expectedRole === 'teacher') {
-                    initTeacherDashboard();
-                } else {
-                    initStudentDashboard();
-                }
-                
-            } catch (error) {
-                console.error('Error verifying user:', error);
-                window.location.href = 'index.html';
-            }
+        // Store current teacher credentials
+        const currentTeacher = auth.currentUser;
+        const teacherEmail = currentTeacher.email;
+        
+        // Create student account using Firebase Auth
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const newUser = userCredential.user;
+        
+        console.log('Student auth account created:', newUser.uid);
+        
+        // Add to users collection
+        await db.collection('users').doc(newUser.uid).set({
+            email: email,
+            name: name,
+            role: 'student',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            teacherId: currentTeacher.uid
         });
-    }
-    
-    // Update current time on student page
-    if (document.getElementById('currentTime')) {
-        updateCurrentTime();
-        setInterval(updateCurrentTime, 1000);
-    }
-    
-    // Set current date on student page
-    if (document.getElementById('currentDate')) {
-        document.getElementById('currentDate').textContent = formatDate(new Date());
-    }
-});
-
-function updateCurrentTime() {
-    const timeElement = document.getElementById('currentTime');
-    if (timeElement) {
-        timeElement.textContent = formatTime(new Date());
+        
+        console.log('Added to users collection');
+        
+        // Add to students collection
+        await db.collection('students').doc(newUser.uid).set({
+            name: name,
+            email: email,
+            studentId: studentId,
+            teacherId: currentTeacher.uid,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        console.log('Added to students collection');
+        
+        // Sign out of student account and back into teacher account
+        await auth.signOut();
+        console.log('Signed out of student account');
+        
+        // Sign back in as teacher
+        const teacherPassword = prompt("Please enter your TEACHER password to continue:");
+        
+        if (teacherPassword) {
+            await auth.signInWithEmailAndPassword(teacherEmail, teacherPassword);
+            console.log('Signed back in as teacher');
+            
+            // Reset form
+            document.getElementById('addStudentForm').reset();
+            
+            showNotification(`Student ${name} added successfully! ✅`, 'success');
+            addActivity(`Added new student: ${name} (${studentId})`);
+            loadStats(); // Refresh stats
+        } else {
+            showNotification('Please login again as teacher', 'info');
+            window.location.href = 'index.html';
+        }
+        
+    } catch (error) {
+        console.error('Error adding student:', error);
+        let errorMessage = 'Failed to add student';
+        
+        switch (error.code) {
+            case 'auth/email-already-in-use':
+                errorMessage = 'Email is already registered';
+                break;
+            case 'auth/weak-password':
+                errorMessage = 'Password should be at least 6 characters';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = 'Invalid email address';
+                break;
+            case 'auth/operation-not-allowed':
+                errorMessage = 'Email/password accounts are not enabled';
+                break;
+            case 'permission-denied':
+                errorMessage = 'Permission denied. Check Firestore rules';
+                break;
+            default:
+                errorMessage = error.message || 'Unknown error occurred';
+        }
+        
+        showNotification(errorMessage, 'error');
+        
+        // Try to sign back in as teacher if we got logged out
+        if (!auth.currentUser) {
+            try {
+                // Prompt for teacher login
+                const teacherEmail = prompt("Enter your teacher email:");
+                const teacherPassword = prompt("Enter your teacher password:");
+                
+                if (teacherEmail && teacherPassword) {
+                    await auth.signInWithEmailAndPassword(teacherEmail, teacherPassword);
+                }
+            } catch (loginError) {
+                console.error('Error signing back in:', loginError);
+                window.location.href = 'index.html';
+            }
+        }
+    } finally {
+        // Reset button
+        addBtn.classList.remove('loading');
+        addBtn.innerHTML = originalText;
     }
 }
 
-// Initialize dashboard functions (will be called from respective JS files)
+// Load Statistics
+async function loadStats() {
+    try {
+        // Count total students
+        const studentsSnapshot = await db.collection('students')
+            .where('teacherId', '==', currentUser.uid)
+            .get();
+        
+        const totalStudents = studentsSnapshot.size;
+        document.getElementById('totalStudents').textContent = totalStudents;
+        
+        // Count pending requests
+        const pendingSnapshot = await db.collection('attendance')
+            .where('status', '==', 'pending')
+            .get();
+        
+        const pendingRequests = pendingSnapshot.size;
+        document.getElementById('pendingRequests').textContent = pendingRequests;
+        
+        // Count today's approved attendance
+        const today = new Date().toISOString().split('T')[0];
+        const approvedTodaySnapshot = await db.collection('attendance')
+            .where('date', '==', today)
+            .where('status', '==', 'approved')
+            .get();
+        
+        const todayApproved = approvedTodaySnapshot.size;
+        document.getElementById('todayApproved').textContent = todayApproved;
+        
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+// Load Pending Attendance
+async function loadPendingAttendance() {
+    const tableBody = document.getElementById('pendingTableBody');
+    
+    try {
+        const snapshot = await db.collection('attendance')
+            .where('status', '==', 'pending')
+            .orderBy('timestamp', 'desc')
+            .get();
+        
+        if (snapshot.empty) {
+            tableBody.innerHTML = `
+                <tr class="no-data">
+                    <td colspan="6">
+                        <i class="fas fa-inbox"></i>
+                        <p>No pending requests</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let html = '';
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            const timestamp = data.timestamp.toDate();
+            
+            html += `
+                <tr>
+                    <td>${data.studentName}</td>
+                    <td>${data.studentId || 'N/A'}</td>
+                    <td>${formatDate(new Date(data.date))}</td>
+                    <td>${formatTime(timestamp)}</td>
+                    <td><span class="status-badge status-pending">Pending</span></td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="approve-btn" onclick="approveAttendance('${doc.id}', '${data.studentName}')">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                            <button class="reject-btn" onclick="rejectAttendance('${doc.id}', '${data.studentName}')">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        tableBody.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading pending attendance:', error);
+        showNotification('Error loading attendance data', 'error');
+    }
+}
+
+// Approve Attendance
+async function approveAttendance(attendanceId, studentName) {
+    try {
+        await db.collection('attendance').doc(attendanceId).update({
+            status: 'approved',
+            approvedBy: currentUser.uid,
+            approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showNotification(`Approved attendance for ${studentName}`, 'success');
+        addActivity(`Approved attendance for ${studentName}`);
+        loadPendingAttendance();
+        loadStats();
+        
+    } catch (error) {
+        console.error('Error approving attendance:', error);
+        showNotification('Failed to approve attendance', 'error');
+    }
+}
+
+// Reject Attendance
+async function rejectAttendance(attendanceId, studentName) {
+    try {
+        await db.collection('attendance').doc(attendanceId).update({
+            status: 'rejected',
+            approvedBy: currentUser.uid,
+            approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showNotification(`Rejected attendance for ${studentName}`, 'info');
+        addActivity(`Rejected attendance for ${studentName}`);
+        loadPendingAttendance();
+        loadStats();
+        
+    } catch (error) {
+        console.error('Error rejecting attendance:', error);
+        showNotification('Failed to reject attendance', 'error');
+    }
+}
+
+// Load Recent Activity
+async function loadRecentActivity() {
+    const activityList = document.getElementById('activityList');
+    if (!activityList) return;
+    
+    try {
+        // Get recent attendance activities
+        const snapshot = await db.collection('attendance')
+            .where('status', 'in', ['approved', 'rejected'])
+            .orderBy('approvedAt', 'desc')
+            .limit(5)
+            .get();
+        
+        let html = '';
+        
+        if (snapshot.empty) {
+            html = `
+                <div class="activity-item">
+                    <div class="activity-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="activity-content">
+                        <p>Welcome to STK College! Start by adding students.</p>
+                        <span class="activity-time">Just now</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const approvedAt = data.approvedAt ? data.approvedAt.toDate() : new Date();
+                const timeAgo = getTimeAgo(approvedAt);
+                
+                const iconClass = data.status === 'approved' ? 'fa-check-circle' : 'fa-times-circle';
+                const action = data.status === 'approved' ? 'Approved' : 'Rejected';
+                
+                html += `
+                    <div class="activity-item">
+                        <div class="activity-icon">
+                            <i class="fas ${iconClass}"></i>
+                        </div>
+                        <div class="activity-content">
+                            <p>${action} attendance for ${data.studentName}</p>
+                            <span class="activity-time">${timeAgo}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        activityList.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading activity:', error);
+    }
+}
+
+function getTimeAgo(date) {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+}
+
+function addActivity(message) {
+    const activityList = document.getElementById('activityList');
+    if (!activityList) return;
+    
+    const newActivity = `
+        <div class="activity-item fade-in">
+            <div class="activity-icon">
+                <i class="fas fa-plus-circle"></i>
+            </div>
+            <div class="activity-content">
+                <p>${message}</p>
+                <span class="activity-time">Just now</span>
+            </div>
+        </div>
+    `;
+    
+    activityList.insertAdjacentHTML('afterbegin', newActivity);
+    
+    // Remove old activities (keep only 10)
+    const activities = activityList.querySelectorAll('.activity-item');
+    if (activities.length > 10) {
+        activities[activities.length - 1].remove();
+    }
+}
+
+// Real-time listeners
+function setupRealtimeListeners() {
+    // Listen for new pending attendance
+    db.collection('attendance')
+        .where('status', '==', 'pending')
+        .onSnapshot((snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === 'added') {
+                    const data = change.doc.data();
+                    showNotification(`New attendance request from ${data.studentName}`, 'info');
+                    loadPendingAttendance();
+                    loadStats();
+                }
+            });
+        });
+}

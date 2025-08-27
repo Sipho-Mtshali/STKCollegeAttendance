@@ -1,404 +1,593 @@
-// pdf.js - PDF export functionality using jsPDF
-import { getFirestore, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-
-const db = getFirestore();
-const auth = getAuth();
-
-// Export attendance to PDF
-async function exportAttendanceToPDF(filterDate = null, filterStatus = 'approved') {
+// PDF Export Functions
+async function exportToPDF() {
+    const exportBtn = document.querySelector('.export-btn');
+    exportBtn.classList.add('loading');
+    exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+    
     try {
-        // Show loading state
-        const exportBtn = document.getElementById('export-pdf-btn');
-        if (exportBtn) {
-            exportBtn.textContent = 'Generating PDF...';
-            exportBtn.disabled = true;
-        }
-
-        // Build query
-        let q;
-        if (filterDate) {
-            q = query(
-                collection(db, 'attendance'),
-                where('status', '==', filterStatus),
-                where('date', '==', filterDate),
-                orderBy('timestamp', 'desc')
-            );
-        } else {
-            q = query(
-                collection(db, 'attendance'),
-                where('status', '==', filterStatus),
-                orderBy('timestamp', 'desc')
-            );
-        }
-
-        const querySnapshot = await getDocs(q);
+        // Fetch all attendance data
+        const attendanceSnapshot = await db.collection('attendance')
+            .where('status', '==', 'approved')
+            .orderBy('date', 'desc')
+            .get();
         
-        if (querySnapshot.empty) {
-            alert('No attendance records found for the selected criteria.');
+        if (attendanceSnapshot.empty) {
+            showNotification('No approved attendance records to export', 'info');
             return;
         }
-
-        // Prepare data
+        
+        // Prepare data for PDF
         const attendanceData = [];
-        querySnapshot.forEach((doc) => {
+        attendanceSnapshot.forEach((doc) => {
             const data = doc.data();
             attendanceData.push({
-                studentEmail: data.studentEmail,
+                studentName: data.studentName,
+                studentId: data.studentIdNumber || 'N/A',
                 date: data.date,
-                time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
-                status: data.status.toUpperCase()
+                time: data.timestamp ? formatTime(data.timestamp.toDate()) : 'N/A',
+                status: 'Present'
             });
         });
-
+        
         // Generate PDF
-        generatePDF(attendanceData, filterDate, filterStatus);
-
+        generateAttendancePDF(attendanceData);
+        
     } catch (error) {
-        console.error('Error exporting PDF:', error);
-        alert('Error generating PDF. Please try again.');
+        console.error('Error exporting to PDF:', error);
+        showNotification('Failed to export PDF', 'error');
     } finally {
-        // Reset button state
-        const exportBtn = document.getElementById('export-pdf-btn');
-        if (exportBtn) {
-            exportBtn.textContent = 'Export PDF';
-            exportBtn.disabled = false;
-        }
+        // Reset button
+        exportBtn.classList.remove('loading');
+        exportBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Export PDF';
     }
 }
 
-// Generate PDF using jsPDF
-function generatePDF(data, filterDate, filterStatus) {
-    // Check if jsPDF is loaded
-    if (typeof window.jsPDF === 'undefined') {
-        console.error('jsPDF library not loaded');
-        alert('PDF library not loaded. Please refresh the page and try again.');
-        return;
-    }
-
-    const { jsPDF } = window.jsPDF;
+function generateAttendancePDF(attendanceData) {
+    // Create new jsPDF instance
+    const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-
-    // PDF styling
-    const primaryColor = [255, 165, 0]; // Orange
-    const secondaryColor = [51, 51, 51]; // Dark gray
-    const lightGray = [245, 245, 245];
-
-    // Header
-    doc.setFillColor(...primaryColor);
-    doc.rect(0, 0, 220, 30, 'F');
     
-    doc.setTextColor(255, 255, 255);
+    // Set font
+    doc.setFont('helvetica');
+    
+    // Add header
     doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Attendance Register', 20, 20);
-
-    // Date and filter info
-    doc.setTextColor(...secondaryColor);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    const currentDate = new Date().toLocaleDateString();
-    doc.text(`Generated on: ${currentDate}`, 20, 40);
+    doc.setTextColor(255, 138, 0); // Orange color
+    doc.text('EduTrack Attendance Report', 20, 25);
     
-    if (filterDate) {
-        doc.text(`Date Filter: ${filterDate}`, 20, 47);
-    }
-    doc.text(`Status Filter: ${filterStatus.toUpperCase()}`, 20, 54);
-
-    // Table headers
-    const headers = [['Student Email', 'Date', 'Time', 'Status']];
+    // Add subtitle
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated on: ${formatDate(new Date())} at ${formatTime(new Date())}`, 20, 35);
     
-    // Table data
-    const tableData = data.map(record => [
-        record.studentEmail,
-        record.date,
+    // Add summary statistics
+    const totalRecords = attendanceData.length;
+    const uniqueStudents = [...new Set(attendanceData.map(record => record.studentId))].length;
+    
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Summary:', 20, 50);
+    
+    doc.setFontSize(11);
+    doc.text(`Total Attendance Records: ${totalRecords}`, 25, 60);
+    doc.text(`Unique Students: ${uniqueStudents}`, 25, 70);
+    
+    // Prepare table data
+    const tableData = attendanceData.map(record => [
+        record.studentName,
+        record.studentId,
+        formatDate(new Date(record.date)),
         record.time,
         record.status
     ]);
-
-    // Generate table using autoTable
-    if (doc.autoTable) {
-        doc.autoTable({
-            head: headers,
-            body: tableData,
-            startY: 65,
-            styles: {
-                fontSize: 9,
-                textColor: secondaryColor,
-                lineColor: [200, 200, 200],
-                lineWidth: 0.5
-            },
-            headStyles: {
-                fillColor: primaryColor,
-                textColor: [255, 255, 255],
-                fontStyle: 'bold',
-                fontSize: 10
-            },
-            alternateRowStyles: {
-                fillColor: lightGray
-            },
-            columnStyles: {
-                0: { cellWidth: 70 }, // Student Email
-                1: { cellWidth: 40 }, // Date
-                2: { cellWidth: 30 }, // Time
-                3: { cellWidth: 30, halign: 'center' } // Status
-            },
-            margin: { left: 20, right: 20 },
-            theme: 'striped'
-        });
-    } else {
-        // Fallback manual table creation
-        let yPosition = 75;
-        
-        // Header row
-        doc.setFillColor(...primaryColor);
-        doc.rect(20, yPosition - 8, 170, 10, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Student Email', 25, yPosition);
-        doc.text('Date', 100, yPosition);
-        doc.text('Time', 130, yPosition);
-        doc.text('Status', 160, yPosition);
-        
-        yPosition += 15;
-        
-        // Data rows
-        doc.setTextColor(...secondaryColor);
-        doc.setFont('helvetica', 'normal');
-        
-        tableData.forEach((row, index) => {
-            if (index % 2 === 0) {
-                doc.setFillColor(...lightGray);
-                doc.rect(20, yPosition - 8, 170, 10, 'F');
-            }
-            
-            doc.text(row[0], 25, yPosition);
-            doc.text(row[1], 100, yPosition);
-            doc.text(row[2], 130, yPosition);
-            doc.text(row[3], 160, yPosition);
-            
-            yPosition += 12;
-            
-            // Add new page if needed
-            if (yPosition > 270) {
-                doc.addPage();
-                yPosition = 30;
-            }
-        });
-    }
-
-    // Footer
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(128, 128, 128);
-        doc.text(`Page ${i} of ${totalPages}`, 20, 285);
-        doc.text(`Total Records: ${data.length}`, 150, 285);
-    }
-
-    // Generate filename
-    const filename = `attendance_register_${filterDate || 'all_dates'}_${filterStatus}_${new Date().toISOString().split('T')[0]}.pdf`;
     
-    // Save PDF
-    doc.save(filename);
-}
-
-// Export approved attendance for specific date
-async function exportDailyAttendance() {
-    const dateInput = document.getElementById('export-date');
-    const selectedDate = dateInput ? dateInput.value : null;
-    
-    if (!selectedDate) {
-        alert('Please select a date to export.');
-        return;
-    }
-    
-    const formattedDate = new Date(selectedDate).toDateString();
-    await exportAttendanceToPDF(formattedDate, 'approved');
-}
-
-// Export all approved attendance
-async function exportAllAttendance() {
-    await exportAttendanceToPDF(null, 'approved');
-}
-
-// Export monthly report
-async function exportMonthlyReport() {
-    const monthInput = document.getElementById('export-month');
-    if (!monthInput) {
-        alert('Month selector not found.');
-        return;
-    }
-    
-    const selectedMonth = monthInput.value;
-    if (!selectedMonth) {
-        alert('Please select a month to export.');
-        return;
-    }
-    
-    try {
-        // Show loading state
-        const exportBtn = document.getElementById('export-monthly-btn');
-        if (exportBtn) {
-            exportBtn.textContent = 'Generating Report...';
-            exportBtn.disabled = true;
+    // Add table
+    doc.autoTable({
+        startY: 85,
+        head: [['Student Name', 'Student ID', 'Date', 'Time', 'Status']],
+        body: tableData,
+        theme: 'grid',
+        styles: {
+            fontSize: 10,
+            cellPadding: 5,
+        },
+        headStyles: {
+            fillColor: [255, 138, 0], // Orange header
+            textColor: [255, 255, 255],
+            fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+            fillColor: [255, 248, 242] // Light orange
+        },
+        columnStyles: {
+            0: { cellWidth: 45 }, // Student Name
+            1: { cellWidth: 30 }, // Student ID
+            2: { cellWidth: 35 }, // Date
+            3: { cellWidth: 25 }, // Time
+            4: { cellWidth: 25 }  // Status
         }
-
-        const [year, month] = selectedMonth.split('-');
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0);
+    });
+    
+    // Add footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
         
-        // Query for the month
-        const q = query(
-            collection(db, 'attendance'),
-            where('status', '==', 'approved'),
-            orderBy('timestamp', 'desc')
-        );
-
-        const querySnapshot = await getDocs(q);
-        const monthlyData = [];
+        // Page number
+        doc.setFontSize(10);
+        doc.setTextColor(128, 128, 128);
+        doc.text(`Page ${i} of ${pageCount}`, 
+                 doc.internal.pageSize.width - 30, 
+                 doc.internal.pageSize.height - 10);
         
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const recordDate = new Date(data.timestamp.toDate());
-            
-            if (recordDate >= startDate && recordDate <= endDate) {
-                monthlyData.push({
-                    studentEmail: data.studentEmail,
-                    date: data.date,
-                    time: recordDate.toLocaleTimeString(),
-                    status: data.status.toUpperCase()
-                });
-            }
-        });
+        // Footer text
+        doc.text('Generated by EduTrack Attendance System', 
+                 20, 
+                 doc.internal.pageSize.height - 10);
+    }
+    
+    // Save the PDF
+    const fileName = `attendance_report_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+    
+    showNotification('PDF exported successfully!', 'success');
+}
 
-        if (monthlyData.length === 0) {
-            alert('No attendance records found for the selected month.');
+// Export attendance by date range
+async function exportDateRangePDF(startDate, endDate) {
+    try {
+        const attendanceSnapshot = await db.collection('attendance')
+            .where('status', '==', 'approved')
+            .where('date', '>=', startDate)
+            .where('date', '<=', endDate)
+            .orderBy('date', 'desc')
+            .get();
+        
+        if (attendanceSnapshot.empty) {
+            showNotification('No attendance records found in selected date range', 'info');
             return;
         }
-
-        // Generate monthly PDF with statistics
-        generateMonthlyReportPDF(monthlyData, selectedMonth);
-
+        
+        const attendanceData = [];
+        attendanceSnapshot.forEach((doc) => {
+            const data = doc.data();
+            attendanceData.push({
+                studentName: data.studentName,
+                studentId: data.studentIdNumber || 'N/A',
+                date: data.date,
+                time: data.timestamp ? formatTime(data.timestamp.toDate()) : 'N/A',
+                status: 'Present'
+            });
+        });
+        
+        generateDateRangePDF(attendanceData, startDate, endDate);
+        
     } catch (error) {
-        console.error('Error generating monthly report:', error);
-        alert('Error generating monthly report. Please try again.');
-    } finally {
-        // Reset button state
-        const exportBtn = document.getElementById('export-monthly-btn');
-        if (exportBtn) {
-            exportBtn.textContent = 'Export Monthly Report';
-            exportBtn.disabled = false;
-        }
+        console.error('Error exporting date range PDF:', error);
+        showNotification('Failed to export PDF', 'error');
     }
 }
 
-// Generate monthly report PDF with statistics
-function generateMonthlyReportPDF(data, selectedMonth) {
-    const { jsPDF } = window.jsPDF;
+function generateDateRangePDF(attendanceData, startDate, endDate) {
+    const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-
-    const primaryColor = [255, 165, 0];
-    const secondaryColor = [51, 51, 51];
     
-    // Header
-    doc.setFillColor(...primaryColor);
-    doc.rect(0, 0, 220, 35, 'F');
+    // Set font
+    doc.setFont('helvetica');
     
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Monthly Attendance Report', 20, 20);
+    // Add header
+    doc.setFontSize(20);
+    doc.setTextColor(255, 138, 0);
+    doc.text('EduTrack Attendance Report', 20, 25);
     
+    // Add date range subtitle
     doc.setFontSize(12);
-    const monthName = new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    doc.text(monthName, 20, 30);
-
-    // Statistics
-    const totalRecords = data.length;
-    const uniqueStudents = [...new Set(data.map(record => record.studentEmail))].length;
-    const uniqueDates = [...new Set(data.map(record => record.date))].length;
-
-    doc.setTextColor(...secondaryColor);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 50);
-    doc.text(`Total Attendance Records: ${totalRecords}`, 20, 57);
-    doc.text(`Unique Students: ${uniqueStudents}`, 20, 64);
-    doc.text(`Days with Attendance: ${uniqueDates}`, 20, 71);
-
-    // Table
-    const headers = [['Student Email', 'Date', 'Time', 'Status']];
-    const tableData = data.map(record => [
-        record.studentEmail,
-        record.date,
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Date Range: ${formatDate(new Date(startDate))} - ${formatDate(new Date(endDate))}`, 20, 35);
+    doc.text(`Generated on: ${formatDate(new Date())} at ${formatTime(new Date())}`, 20, 45);
+    
+    // Add summary statistics
+    const totalRecords = attendanceData.length;
+    const uniqueStudents = [...new Set(attendanceData.map(record => record.studentId))].length;
+    const dateRange = attendanceData.length > 0 ? 
+        Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1 : 0;
+    
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Summary:', 20, 60);
+    
+    doc.setFontSize(11);
+    doc.text(`Total Attendance Records: ${totalRecords}`, 25, 70);
+    doc.text(`Unique Students: ${uniqueStudents}`, 25, 80);
+    doc.text(`Days in Range: ${dateRange}`, 25, 90);
+    
+    if (uniqueStudents > 0) {
+        const averageAttendance = (totalRecords / (uniqueStudents * dateRange) * 100).toFixed(1);
+        doc.text(`Average Attendance Rate: ${averageAttendance}%`, 25, 100);
+    }
+    
+    // Prepare table data
+    const tableData = attendanceData.map(record => [
+        record.studentName,
+        record.studentId,
+        formatDate(new Date(record.date)),
         record.time,
         record.status
     ]);
-
-    if (doc.autoTable) {
-        doc.autoTable({
-            head: headers,
-            body: tableData,
-            startY: 85,
-            styles: {
-                fontSize: 9,
-                textColor: secondaryColor
-            },
-            headStyles: {
-                fillColor: primaryColor,
-                textColor: [255, 255, 255],
-                fontStyle: 'bold'
-            }
-        });
+    
+    // Add table
+    doc.autoTable({
+        startY: 115,
+        head: [['Student Name', 'Student ID', 'Date', 'Time', 'Status']],
+        body: tableData,
+        theme: 'grid',
+        styles: {
+            fontSize: 10,
+            cellPadding: 5,
+        },
+        headStyles: {
+            fillColor: [255, 138, 0],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+            fillColor: [255, 248, 242]
+        },
+        columnStyles: {
+            0: { cellWidth: 45 },
+            1: { cellWidth: 30 },
+            2: { cellWidth: 35 },
+            3: { cellWidth: 25 },
+            4: { cellWidth: 25 }
+        }
+    });
+    
+    // Add footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(128, 128, 128);
+        doc.text(`Page ${i} of ${pageCount}`, 
+                 doc.internal.pageSize.width - 30, 
+                 doc.internal.pageSize.height - 10);
+        
+        doc.text('Generated by EduTrack Attendance System', 
+                 20, 
+                 doc.internal.pageSize.height - 10);
     }
-
-    const filename = `monthly_attendance_report_${selectedMonth}.pdf`;
-    doc.save(filename);
+    
+    // Save the PDF
+    const fileName = `attendance_report_${startDate}_to_${endDate}.pdf`;
+    doc.save(fileName);
+    
+    showNotification('Date range PDF exported successfully!', 'success');
 }
 
-// Initialize PDF export functionality
-document.addEventListener('DOMContentLoaded', function() {
-    // Export buttons event listeners
-    const exportPdfBtn = document.getElementById('export-pdf-btn');
-    const exportDailyBtn = document.getElementById('export-daily-btn');
-    const exportAllBtn = document.getElementById('export-all-btn');
-    const exportMonthlyBtn = document.getElementById('export-monthly-btn');
-
-    if (exportPdfBtn) {
-        exportPdfBtn.addEventListener('click', exportAllAttendance);
+// Export student-wise attendance summary
+async function exportStudentSummaryPDF() {
+    try {
+        // Get all students
+        const studentsSnapshot = await db.collection('students')
+            .where('teacherId', '==', currentUser.uid)
+            .get();
+        
+        if (studentsSnapshot.empty) {
+            showNotification('No students found', 'info');
+            return;
+        }
+        
+        // Get attendance data for all students
+        const attendanceSnapshot = await db.collection('attendance')
+            .where('status', '==', 'approved')
+            .get();
+        
+        // Process data
+        const studentSummary = {};
+        studentsSnapshot.forEach(doc => {
+            const student = doc.data();
+            studentSummary[doc.id] = {
+                name: student.name,
+                studentId: student.studentId,
+                totalDays: 0,
+                presentDays: 0,
+                percentage: 0
+            };
+        });
+        
+        // Count attendance
+        attendanceSnapshot.forEach(doc => {
+            const attendance = doc.data();
+            if (studentSummary[attendance.studentId]) {
+                studentSummary[attendance.studentId].presentDays++;
+            }
+        });
+        
+        // Calculate total days (assuming all students have same total days)
+        const totalDays = attendanceSnapshot.size > 0 ? 
+            Math.max(...Object.values(studentSummary).map(s => s.presentDays)) : 0;
+        
+        // Calculate percentages
+        Object.values(studentSummary).forEach(student => {
+            student.totalDays = totalDays;
+            student.percentage = totalDays > 0 ? 
+                ((student.presentDays / totalDays) * 100).toFixed(1) : 0;
+        });
+        
+        generateStudentSummaryPDF(Object.values(studentSummary));
+        
+    } catch (error) {
+        console.error('Error exporting student summary PDF:', error);
+        showNotification('Failed to export student summary PDF', 'error');
     }
+}
 
-    if (exportDailyBtn) {
-        exportDailyBtn.addEventListener('click', exportDailyAttendance);
-    }
-
-    if (exportAllBtn) {
-        exportAllBtn.addEventListener('click', exportAllAttendance);
-    }
-
-    if (exportMonthlyBtn) {
-        exportMonthlyBtn.addEventListener('click', exportMonthlyReport);
-    }
-
-    // Set default dates
-    const dateInput = document.getElementById('export-date');
-    const monthInput = document.getElementById('export-month');
+function generateStudentSummaryPDF(studentData) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
     
-    if (dateInput) {
-        dateInput.value = new Date().toISOString().split('T')[0];
+    // Set font
+    doc.setFont('helvetica');
+    
+    // Add header
+    doc.setFontSize(20);
+    doc.setTextColor(255, 138, 0);
+    doc.text('Student Attendance Summary', 20, 25);
+    
+    // Add subtitle
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated on: ${formatDate(new Date())} at ${formatTime(new Date())}`, 20, 35);
+    
+    // Add summary statistics
+    const totalStudents = studentData.length;
+    const averageAttendance = studentData.length > 0 ? 
+        (studentData.reduce((sum, student) => sum + parseFloat(student.percentage), 0) / totalStudents).toFixed(1) : 0;
+    
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Summary:', 20, 50);
+    
+    doc.setFontSize(11);
+    doc.text(`Total Students: ${totalStudents}`, 25, 60);
+    doc.text(`Class Average Attendance: ${averageAttendance}%`, 25, 70);
+    
+    // Prepare table data
+    const tableData = studentData.map(student => [
+        student.name,
+        student.studentId,
+        student.presentDays.toString(),
+        student.totalDays.toString(),
+        `${student.percentage}%`
+    ]);
+    
+    // Add table
+    doc.autoTable({
+        startY: 85,
+        head: [['Student Name', 'Student ID', 'Present Days', 'Total Days', 'Attendance %']],
+        body: tableData,
+        theme: 'grid',
+        styles: {
+            fontSize: 10,
+            cellPadding: 5,
+        },
+        headStyles: {
+            fillColor: [255, 138, 0],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+            fillColor: [255, 248, 242]
+        },
+        columnStyles: {
+            0: { cellWidth: 50 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 30 },
+            4: { cellWidth: 30, halign: 'center' }
+        },
+        didParseCell: function(data) {
+            // Color code attendance percentages
+            if (data.column.index === 4 && data.section === 'body') {
+                const percentage = parseFloat(data.cell.text[0]);
+                if (percentage >= 75) {
+                    data.cell.styles.textColor = [40, 167, 69]; // Green
+                } else if (percentage >= 50) {
+                    data.cell.styles.textColor = [255, 193, 7]; // Yellow
+                } else {
+                    data.cell.styles.textColor = [220, 53, 69]; // Red
+                }
+                data.cell.styles.fontStyle = 'bold';
+            }
+        }
+    });
+    
+    // Add legend
+    const finalY = doc.lastAutoTable.finalY + 20;
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Attendance Legend:', 20, finalY);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(40, 167, 69);
+    doc.text('• 75% and above - Excellent', 25, finalY + 10);
+    
+    doc.setTextColor(255, 193, 7);
+    doc.text('• 50% - 74% - Good', 25, finalY + 20);
+    
+    doc.setTextColor(220, 53, 69);
+    doc.text('• Below 50% - Needs Improvement', 25, finalY + 30);
+    
+    // Add footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(128, 128, 128);
+        doc.text(`Page ${i} of ${pageCount}`, 
+                 doc.internal.pageSize.width - 30, 
+                 doc.internal.pageSize.height - 10);
+        
+        doc.text('Generated by EduTrack Attendance System', 
+                 20, 
+                 doc.internal.pageSize.height - 10);
     }
     
-    if (monthInput) {
-        const currentDate = new Date();
-        const currentMonth = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
-        monthInput.value = currentMonth;
-    }
-});
+    // Save the PDF
+    const fileName = `student_attendance_summary_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+    
+    showNotification('Student summary PDF exported successfully!', 'success');
+}
 
-// Export functions for global use
-window.exportAttendanceToPDF = exportAttendanceToPDF;
-window.exportDailyAttendance = exportDailyAttendance;
-window.exportAllAttendance = exportAllAttendance;
-window.exportMonthlyReport = exportMonthlyReport;
+// Export daily attendance sheet (for a specific date)
+async function exportDailyAttendancePDF(date) {
+    try {
+        const attendanceSnapshot = await db.collection('attendance')
+            .where('date', '==', date)
+            .where('status', '==', 'approved')
+            .get();
+        
+        // Get all students to show who was absent
+        const studentsSnapshot = await db.collection('students')
+            .where('teacherId', '==', currentUser.uid)
+            .get();
+        
+        const allStudents = {};
+        studentsSnapshot.forEach(doc => {
+            const student = doc.data();
+            allStudents[doc.id] = {
+                name: student.name,
+                studentId: student.studentId,
+                status: 'Absent'
+            };
+        });
+        
+        // Mark present students
+        attendanceSnapshot.forEach(doc => {
+            const attendance = doc.data();
+            if (allStudents[attendance.studentId]) {
+                allStudents[attendance.studentId].status = 'Present';
+                allStudents[attendance.studentId].time = attendance.timestamp ? 
+                    formatTime(attendance.timestamp.toDate()) : 'N/A';
+            }
+        });
+        
+        generateDailyAttendancePDF(Object.values(allStudents), date);
+        
+    } catch (error) {
+        console.error('Error exporting daily attendance PDF:', error);
+        showNotification('Failed to export daily attendance PDF', 'error');
+    }
+}
+
+function generateDailyAttendancePDF(studentData, date) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Set font
+    doc.setFont('helvetica');
+    
+    // Add header
+    doc.setFontSize(20);
+    doc.setTextColor(255, 138, 0);
+    doc.text('Daily Attendance Sheet', 20, 25);
+    
+    // Add date
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Date: ${formatDate(new Date(date))}`, 20, 35);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated on: ${formatDate(new Date())} at ${formatTime(new Date())}`, 20, 45);
+    
+    // Add summary
+    const presentCount = studentData.filter(s => s.status === 'Present').length;
+    const absentCount = studentData.filter(s => s.status === 'Absent').length;
+    const totalStudents = studentData.length;
+    const attendanceRate = totalStudents > 0 ? ((presentCount / totalStudents) * 100).toFixed(1) : 0;
+    
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Summary:', 20, 60);
+    
+    doc.setFontSize(11);
+    doc.text(`Total Students: ${totalStudents}`, 25, 70);
+    doc.text(`Present: ${presentCount}`, 25, 80);
+    doc.text(`Absent: ${absentCount}`, 25, 90);
+    doc.text(`Attendance Rate: ${attendanceRate}%`, 25, 100);
+    
+    // Prepare table data
+    const tableData = studentData.map(student => [
+        student.name,
+        student.studentId,
+        student.status,
+        student.status === 'Present' ? (student.time || 'N/A') : '-'
+    ]);
+    
+    // Sort by name
+    tableData.sort((a, b) => a[0].localeCompare(b[0]));
+    
+    // Add table
+    doc.autoTable({
+        startY: 115,
+        head: [['Student Name', 'Student ID', 'Status', 'Time Marked']],
+        body: tableData,
+        theme: 'grid',
+        styles: {
+            fontSize: 10,
+            cellPadding: 5,
+        },
+        headStyles: {
+            fillColor: [255, 138, 0],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+            fillColor: [255, 248, 242]
+        },
+        columnStyles: {
+            0: { cellWidth: 60 },
+            1: { cellWidth: 40 },
+            2: { cellWidth: 30, halign: 'center' },
+            3: { cellWidth: 35, halign: 'center' }
+        },
+        didParseCell: function(data) {
+            // Color code status
+            if (data.column.index === 2 && data.section === 'body') {
+                if (data.cell.text[0] === 'Present') {
+                    data.cell.styles.textColor = [40, 167, 69];
+                    data.cell.styles.fontStyle = 'bold';
+                } else {
+                    data.cell.styles.textColor = [220, 53, 69];
+                    data.cell.styles.fontStyle = 'bold';
+                }
+            }
+        }
+    });
+    
+    // Add footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(128, 128, 128);
+        doc.text(`Page ${i} of ${pageCount}`, 
+                 doc.internal.pageSize.width - 30, 
+                 doc.internal.pageSize.height - 10);
+        
+        doc.text('Generated by EduTrack Attendance System', 
+                 20, 
+                 doc.internal.pageSize.height - 10);
+    }
+    
+    // Save the PDF
+    const fileName = `daily_attendance_${date}.pdf`;
+    doc.save(fileName);
+    
+    showNotification('Daily attendance PDF exported successfully!', 'success');
+}
