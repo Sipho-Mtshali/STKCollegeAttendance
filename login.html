@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STK College - Login</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <link rel="stylesheet" href="login.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="login-container">
+        <div class="login-card">
+            <div class="logo-section">
+                <div class="logo">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>STK College</h1>
+                    <p>Attendance Management System</p>
+                </div>
+            </div>
+
+            <form class="login-form" id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <div class="input-group">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="email" class="form-control" placeholder="Enter your email" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="input-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" class="form-control" placeholder="Enter your password" required>
+                        <i class="fas fa-eye password-toggle" id="passwordToggle"></i>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Login as</label>
+                    <div class="role-selection">
+                        <div class="role-option">
+                            <input type="radio" id="roleAdmin" name="role" value="admin">
+                            <label for="roleAdmin" class="role-label">
+                                <i class="fas fa-user-cog"></i>
+                                <span>Admin</span>
+                            </label>
+                        </div>
+                        <div class="role-option">
+                            <input type="radio" id="roleTeacher" name="role" value="teacher" checked>
+                            <label for="roleTeacher" class="role-label">
+                                <i class="fas fa-chalkboard-teacher"></i>
+                                <span>Teacher</span>
+                            </label>
+                        </div>
+                        <div class="role-option">
+                            <input type="radio" id="roleStudent" name="role" value="student">
+                            <label for="roleStudent" class="role-label">
+                                <i class="fas fa-user-graduate"></i>
+                                <span>Student</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="remember-forgot">
+                    <div class="remember-me">
+                        <input type="checkbox" id="rememberMe">
+                        <label for="rememberMe">Remember me</label>
+                    </div>
+                    <a href="#" class="forgot-password">Forgot Password?</a>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="loginButton">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Sign In
+                </button>
+
+                <div class="error-message" id="errorMessage">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="errorText"></span>
+                </div>
+            </form>
+
+            <div class="footer-links">
+                <p>Need help? <a href="#">Contact Support</a></p>
+            </div>
+        </div>
+    </div>
+     <script src="login.js"></script>
+</body>
+</html>
+[file content end]

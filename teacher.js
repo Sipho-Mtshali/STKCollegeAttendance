@@ -1,381 +1,603 @@
-// Teacher Dashboard Functions
-let studentsData = [];
-let attendanceData = [];
+// Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDV1Wcl9a19chq6JsVR-TCDQhT0tS1BzFo",
+            authDomain: "stkcollegeattendance.firebaseapp.com",
+            projectId: "stkcollegeattendance",
+            storageBucket: "stkcollegeattendance.firebasestorage.app",
+            messagingSenderId: "574527402732",
+            appId: "1:574527402732:web:ecedfb8d3e9aa693776bc9",
+            measurementId: "G-8SDMWZ8H9Z"
+        };
 
-function initTeacherDashboard() {
-    loadStats();
-    loadPendingAttendance();
-    loadRecentActivity();
-    setupAddStudentForm();
-    setupRealtimeListeners();
-}
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
-// Add Student Functionality
-function setupAddStudentForm() {
-    const form = document.getElementById('addStudentForm');
-    if (form) {
-        form.addEventListener('submit', addStudent);
-    }
-}
+        // Global variables
+        let currentUser = null;
+        let teacherData = null;
+        let studentsList = [];
 
-async function addStudent(e) {
-    e.preventDefault();
-    
-    const name = document.getElementById('studentName').value.trim();
-    const studentId = document.getElementById('studentId').value.trim();
-    const email = document.getElementById('studentEmail').value.trim();
-    const password = document.getElementById('studentPassword').value;
-    
-    if (!name || !studentId || !email || !password) {
-        showNotification('Please fill all fields', 'error');
-        return;
-    }
-    
-    const addBtn = document.querySelector('.add-btn');
-    const originalText = addBtn.innerHTML;
-    addBtn.classList.add('loading');
-    addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding Student...';
-    
-    try {
-        console.log('Starting student creation process...');
-        
-        // Store current teacher credentials
-        const currentTeacher = auth.currentUser;
-        const teacherEmail = currentTeacher.email;
-        
-        // Create student account using Firebase Auth
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        const newUser = userCredential.user;
-        
-        console.log('Student auth account created:', newUser.uid);
-        
-        // Add to users collection
-        await db.collection('users').doc(newUser.uid).set({
-            email: email,
-            name: name,
-            role: 'student',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            teacherId: currentTeacher.uid
+        // Check authentication state
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // User is signed in
+                currentUser = user;
+                document.getElementById('userNameDisplay').textContent = user.displayName || user.email;
+                checkTeacherRole(user.uid);
+            } else {
+                // No user is signed in, redirect to login
+                window.location.href = 'login.html';
+            }
         });
-        
-        console.log('Added to users collection');
-        
-        // Add to students collection
-        await db.collection('students').doc(newUser.uid).set({
-            name: name,
-            email: email,
-            studentId: studentId,
-            teacherId: currentTeacher.uid,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        console.log('Added to students collection');
-        
-        // Sign out of student account and back into teacher account
-        await auth.signOut();
-        console.log('Signed out of student account');
-        
-        // Sign back in as teacher
-        const teacherPassword = prompt("Please enter your TEACHER password to continue:");
-        
-        if (teacherPassword) {
-            await auth.signInWithEmailAndPassword(teacherEmail, teacherPassword);
-            console.log('Signed back in as teacher');
-            
-            // Reset form
-            document.getElementById('addStudentForm').reset();
-            
-            showNotification(`Student ${name} added successfully! ✅`, 'success');
-            addActivity(`Added new student: ${name} (${studentId})`);
-            loadStats(); // Refresh stats
-        } else {
-            showNotification('Please login again as teacher', 'info');
-            window.location.href = 'index.html';
+
+        // Check if user has teacher role
+        function checkTeacherRole(uid) {
+            db.collection('users').doc(uid).get()
+                .then((doc) => {
+                    if (doc.exists) {
+                        const userData = doc.data();
+                        if (userData.role !== 'teacher') {
+                            showToast('Access denied. Teacher privileges required.', 'error');
+                            setTimeout(() => {
+                                logout();
+                            }, 2000);
+                        } else {
+                            // Load teacher data and dashboard
+                            teacherData = userData;
+                            loadDashboardData();
+                            loadStudents();
+                            setupRealtimeListeners();
+                        }
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error checking user role:', error);
+                    showToast('Error verifying permissions.', 'error');
+                });
         }
-        
-    } catch (error) {
-        console.error('Error adding student:', error);
-        let errorMessage = 'Failed to add student';
-        
-        switch (error.code) {
-            case 'auth/email-already-in-use':
-                errorMessage = 'Email is already registered';
-                break;
-            case 'auth/weak-password':
-                errorMessage = 'Password should be at least 6 characters';
-                break;
-            case 'auth/invalid-email':
-                errorMessage = 'Invalid email address';
-                break;
-            case 'auth/operation-not-allowed':
-                errorMessage = 'Email/password accounts are not enabled';
-                break;
-            case 'permission-denied':
-                errorMessage = 'Permission denied. Check Firestore rules';
-                break;
-            default:
-                errorMessage = error.message || 'Unknown error occurred';
+
+        // Load dashboard data
+        function loadDashboardData() {
+            // Load student counts
+            db.collection('students').where('teacherId', '==', currentUser.uid).get()
+                .then((querySnapshot) => {
+                    document.getElementById('totalStudents').textContent = querySnapshot.size;
+                });
+
+            // Load pending approvals count
+            db.collection('attendance').where('status', '==', 'pending').get()
+                .then((querySnapshot) => {
+                    document.getElementById('pendingApprovals').textContent = querySnapshot.size;
+                });
+
+            // Load today's attendance count
+            const today = new Date().toISOString().split('T')[0];
+            db.collection('attendance')
+                .where('date', '==', today)
+                .where('status', '==', 'approved')
+                .get()
+                .then((querySnapshot) => {
+                    document.getElementById('todayAttendance').textContent = querySnapshot.size;
+                });
+
+            // Load recent activities
+            loadRecentActivities();
         }
-        
-        showNotification(errorMessage, 'error');
-        
-        // Try to sign back in as teacher if we got logged out
-        if (!auth.currentUser) {
-            try {
-                // Prompt for teacher login
-                const teacherEmail = prompt("Enter your teacher email:");
-                const teacherPassword = prompt("Enter your teacher password:");
+
+        // Load students list
+        function loadStudents() {
+            db.collection('students').where('teacherId', '==', currentUser.uid).get()
+                .then((querySnapshot) => {
+                    studentsList = [];
+                    querySnapshot.forEach((doc) => {
+                        studentsList.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+                });
+        }
+
+        // Load pending attendance
+        function loadPendingAttendance() {
+            db.collection('attendance')
+                .where('status', '==', 'pending')
+                .orderBy('timestamp', 'desc')
+                .get()
+                .then((querySnapshot) => {
+                    const tbody = document.getElementById('pendingTableBody');
+                    tbody.innerHTML = '';
+                    
+                    if (querySnapshot.empty) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 2rem;">
+                                    <i class="fas fa-check-circle" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
+                                    <p style="color: var(--gray-500);">No pending attendance requests</p>
+                                </td>
+                            </tr>
+                        `;
+                        return;
+                    }
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const row = document.createElement('tr');
+                        
+                        row.innerHTML = `
+                            <td>${data.studentName}</td>
+                            <td>${data.studentId || 'N/A'}</td>
+                            <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
+                            <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
+                            <td><span class="status-badge ${data.status}">${data.status}</span></td>
+                            <td>
+                                <button class="btn btn-primary btn-sm" onclick="approveAttendance('${doc.id}')">
+                                    <i class="fas fa-check"></i> Approve
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="rejectAttendance('${doc.id}')">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                            </td>
+                        `;
+                        
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Error loading pending attendance:', error);
+                    showToast('Error loading pending attendance.', 'error');
+                });
+        }
+
+        // Filter pending attendance
+        function filterPendingAttendance() {
+            const dateFilter = document.getElementById('dateFilter').value;
+            const studentFilter = document.getElementById('studentFilter').value.toLowerCase();
+            const rows = document.getElementById('pendingTableBody').querySelectorAll('tr');
+            
+            rows.forEach((row) => {
+                if (row.cells.length < 6) return; // Skip the no-data row
                 
-                if (teacherEmail && teacherPassword) {
-                    await auth.signInWithEmailAndPassword(teacherEmail, teacherPassword);
+                const date = row.cells[2].textContent;
+                const studentName = row.cells[0].textContent.toLowerCase();
+                
+                const dateMatch = !dateFilter || date === new Date(dateFilter).toLocaleDateString();
+                const studentMatch = !studentFilter || studentName.includes(studentFilter);
+                
+                if (dateMatch && studentMatch) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
                 }
-            } catch (loginError) {
-                console.error('Error signing back in:', loginError);
-                window.location.href = 'index.html';
+            });
+        }
+
+        // Load attendance history
+        function loadAttendanceHistory() {
+            db.collection('attendance')
+                .orderBy('timestamp', 'desc')
+                .get()
+                .then((querySnapshot) => {
+                    const tbody = document.getElementById('historyTableBody');
+                    tbody.innerHTML = '';
+                    
+                    if (querySnapshot.empty) {
+                        tbody.innerHTML = `
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 2rem;">
+                                    <i class="fas fa-inbox" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
+                                    <p style="color: var(--gray-500);">No attendance records found</p>
+                                </td>
+                            </tr>
+                        `;
+                        return;
+                    }
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const row = document.createElement('tr');
+                        
+                        row.innerHTML = `
+                            <td>${data.studentName}</td>
+                            <td>${data.studentId || 'N/A'}</td>
+                            <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
+                            <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
+                            <td><span class="status-badge ${data.status}">${data.status}</span></td>
+                            <td>${data.approvedBy || '-'}</td>
+                        `;
+                        
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Error loading attendance history:', error);
+                    showToast('Error loading attendance history.', 'error');
+                });
+        }
+
+        // Filter attendance history
+        function filterAttendanceHistory() {
+            const dateFilter = document.getElementById('historyDateFilter').value;
+            const studentFilter = document.getElementById('historyStudentFilter').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const rows = document.getElementById('historyTableBody').querySelectorAll('tr');
+            
+            rows.forEach((row) => {
+                if (row.cells.length < 6) return; // Skip the no-data row
+                
+                const date = row.cells[2].textContent;
+                const studentName = row.cells[0].textContent.toLowerCase();
+                const status = row.cells[4].querySelector('.status-badge').textContent.toLowerCase();
+                
+                const dateMatch = !dateFilter || date === new Date(dateFilter).toLocaleDateString();
+                const studentMatch = !studentFilter || studentName.includes(studentFilter);
+                const statusMatch = statusFilter === 'all' || status === statusFilter;
+                
+                if (dateMatch && studentMatch && statusMatch) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        // Load recent activities
+        function loadRecentActivities() {
+            db.collection('activities')
+                .orderBy('timestamp', 'desc')
+                .limit(5)
+                .get()
+                .then((querySnapshot) => {
+                    const activityList = document.getElementById('activityList');
+                    activityList.innerHTML = '';
+                    
+                    if (querySnapshot.empty) {
+                        activityList.innerHTML = `
+                            <li style="text-align: center; padding: 1rem; color: var(--gray-500);">
+                                <i class="fas fa-info-circle" style="display: block; font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                                No recent activities
+                            </li>
+                        `;
+                        return;
+                    }
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const item = document.createElement('li');
+                        item.className = 'activity-item';
+                        
+                        item.innerHTML = `
+                            <div class="activity-icon ${data.type === 'user' ? 'blue' : 'green'}">
+                                <i class="fas ${data.icon}"></i>
+                            </div>
+                            <div class="activity-content">
+                                <p>${data.message}</p>
+                                <span class="activity-time">${formatTimeAgo(data.timestamp.toDate())}</span>
+                            </div>
+                        `;
+                        
+                        activityList.appendChild(item);
+                    });
+                });
+        }
+
+        // Approve attendance
+        function approveAttendance(attendanceId) {
+            db.collection('attendance').doc(attendanceId).get()
+                .then((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        
+                        return db.collection('attendance').doc(attendanceId).update({
+                            status: 'approved',
+                            approvedBy: currentUser.displayName || currentUser.email,
+                            approvedAt: new Date()
+                        }).then(() => {
+                            showToast('Attendance approved successfully.', 'success');
+                            loadPendingAttendance();
+                            
+                            // Add activity log
+                            db.collection('activities').add({
+                                type: 'attendance',
+                                icon: 'fa-check-circle',
+                                message: `Approved attendance for ${data.studentName}`,
+                                timestamp: new Date(),
+                                userId: currentUser.uid,
+                                userName: currentUser.displayName || currentUser.email
+                            });
+                        });
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error approving attendance:', error);
+                    showToast('Error approving attendance.', 'error');
+                });
+        }
+
+        // Reject attendance
+        function rejectAttendance(attendanceId) {
+            db.collection('attendance').doc(attendanceId).get()
+                .then((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        
+                        return db.collection('attendance').doc(attendanceId).update({
+                            status: 'rejected',
+                            approvedBy: currentUser.displayName || currentUser.email,
+                            approvedAt: new Date()
+                        }).then(() => {
+                            showToast('Attendance rejected.', 'success');
+                            loadPendingAttendance();
+                            
+                            // Add activity log
+                            db.collection('activities').add({
+                                type: 'attendance',
+                                icon: 'fa-times-circle',
+                                message: `Rejected attendance for ${data.studentName}`,
+                                timestamp: new Date(),
+                                userId: currentUser.uid,
+                                userName: currentUser.displayName || currentUser.email
+                            });
+                        });
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error rejecting attendance:', error);
+                    showToast('Error rejecting attendance.', 'error');
+                });
+        }
+
+        // Export today's attendance
+        function exportTodayAttendance() {
+            const today = new Date().toISOString().split('T')[0];
+            
+            db.collection('attendance')
+                .where('date', '==', today)
+                .get()
+                .then((querySnapshot) => {
+                    const attendanceData = [];
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        attendanceData.push({
+                            studentName: data.studentName,
+                            studentId: data.studentId || 'N/A',
+                            date: data.date,
+                            time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
+                            status: data.status
+                        });
+                    });
+                    
+                    generatePDF(attendanceData, `Today's Attendance Report - ${today}`);
+                })
+                .catch((error) => {
+                    console.error('Error exporting today\'s attendance:', error);
+                    showToast('Error generating report.', 'error');
+                });
+        }
+
+        // Export date range attendance
+        function exportDateRangeAttendance() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!startDate || !endDate) {
+                showToast('Please select both start and end dates.', 'error');
+                return;
+            }
+            
+            db.collection('attendance')
+                .where('date', '>=', startDate)
+                .where('date', '<=', endDate)
+                .get()
+                .then((querySnapshot) => {
+                    const attendanceData = [];
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        attendanceData.push({
+                            studentName: data.studentName,
+                            studentId: data.studentId || 'N/A',
+                            date: data.date,
+                            time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
+                            status: data.status
+                        });
+                    });
+                    
+                    generatePDF(attendanceData, `Attendance Report - ${startDate} to ${endDate}`);
+                })
+                .catch((error) => {
+                    console.error('Error exporting date range attendance:', error);
+                    showToast('Error generating report.', 'error');
+                });
+        }
+
+        // Export full attendance
+        function exportFullAttendance() {
+            db.collection('attendance')
+                .get()
+                .then((querySnapshot) => {
+                    const attendanceData = [];
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        attendanceData.push({
+                            studentName: data.studentName,
+                            studentId: data.studentId || 'N/A',
+                            date: data.date,
+                            time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
+                            status: data.status
+                        });
+                    });
+                    
+                    generatePDF(attendanceData, 'Full Attendance Report');
+                })
+                .catch((error) => {
+                    console.error('Error exporting full attendance:', error);
+                    showToast('Error generating report.', 'error');
+                });
+        }
+
+        // Generate PDF report
+        function generatePDF(data, title) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Add title
+            doc.setFontSize(18);
+            doc.text(title, 14, 15);
+            
+            // Add date
+            doc.setFontSize(10);
+            doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 22);
+            
+            // Prepare table data
+            const tableData = data.map(item => [
+                item.studentName,
+                item.studentId,
+                item.date,
+                item.time,
+                item.status.toUpperCase()
+            ]);
+            
+            // Generate table
+            doc.autoTable({
+                startY: 30,
+                head: [['Student Name', 'Student ID', 'Date', 'Time', 'Status']],
+                body: tableData,
+                theme: 'grid',
+                headStyles: {
+                    fillColor: [79, 70, 229],
+                    textColor: 255
+                },
+                alternateRowStyles: {
+                    fillColor: [243, 244, 246]
+                }
+            });
+            
+            // Save the PDF
+            doc.save(`${title.replace(/\s+/g, '_')}.pdf`);
+            showToast('Report downloaded successfully.', 'success');
+        }
+
+        // Show section
+        function showSection(sectionId) {
+            // Hide all sections
+            document.querySelectorAll('.section-content').forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            // Remove active class from all nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Show selected section
+            document.getElementById(`${sectionId}Section`).style.display = 'block';
+            
+            // Add active class to clicked nav link
+            document.querySelector(`.nav-link[onclick="showSection('${sectionId}')"]`).classList.add('active');
+            
+            // Update page title
+            const pageTitle = document.getElementById('pageTitle');
+            const pageSubtitle = document.getElementById('pageSubtitle');
+            
+            switch(sectionId) {
+                case 'dashboard':
+                    pageTitle.textContent = 'Teacher Dashboard';
+                    pageSubtitle.textContent = 'Welcome back! Here\'s your teaching summary.';
+                    loadDashboardData();
+                    break;
+                case 'pending':
+                    pageTitle.textContent = 'Pending Approval';
+                    pageSubtitle.textContent = 'Review and approve student attendance requests.';
+                    loadPendingAttendance();
+                    break;
+                case 'history':
+                    pageTitle.textContent = 'Attendance History';
+                    pageSubtitle.textContent = 'View all attendance records.';
+                    loadAttendanceHistory();
+                    break;
+                case 'reports':
+                    pageTitle.textContent = 'Attendance Reports';
+                    pageSubtitle.textContent = 'Generate and download attendance reports.';
+                    break;
             }
         }
-    } finally {
-        // Reset button
-        addBtn.classList.remove('loading');
-        addBtn.innerHTML = originalText;
-    }
-}
 
-// Load Statistics
-async function loadStats() {
-    try {
-        // Count total students
-        const studentsSnapshot = await db.collection('students')
-            .where('teacherId', '==', currentUser.uid)
-            .get();
-        
-        const totalStudents = studentsSnapshot.size;
-        document.getElementById('totalStudents').textContent = totalStudents;
-        
-        // Count pending requests
-        const pendingSnapshot = await db.collection('attendance')
-            .where('status', '==', 'pending')
-            .get();
-        
-        const pendingRequests = pendingSnapshot.size;
-        document.getElementById('pendingRequests').textContent = pendingRequests;
-        
-        // Count today's approved attendance
-        const today = new Date().toISOString().split('T')[0];
-        const approvedTodaySnapshot = await db.collection('attendance')
-            .where('date', '==', today)
-            .where('status', '==', 'approved')
-            .get();
-        
-        const todayApproved = approvedTodaySnapshot.size;
-        document.getElementById('todayApproved').textContent = todayApproved;
-        
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
-}
-
-// Load Pending Attendance
-async function loadPendingAttendance() {
-    const tableBody = document.getElementById('pendingTableBody');
-    
-    try {
-        const snapshot = await db.collection('attendance')
-            .where('status', '==', 'pending')
-            .orderBy('timestamp', 'desc')
-            .get();
-        
-        if (snapshot.empty) {
-            tableBody.innerHTML = `
-                <tr class="no-data">
-                    <td colspan="6">
-                        <i class="fas fa-inbox"></i>
-                        <p>No pending requests</p>
-                    </td>
-                </tr>
-            `;
-            return;
+        // Setup realtime listeners
+        function setupRealtimeListeners() {
+            // Listen for new pending attendance
+            db.collection('attendance')
+                .where('status', '==', 'pending')
+                .onSnapshot((snapshot) => {
+                    document.getElementById('pendingApprovals').textContent = snapshot.size;
+                });
         }
-        
-        let html = '';
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            const timestamp = data.timestamp.toDate();
+
+        // Format time ago
+        function formatTimeAgo(date) {
+            const now = new Date();
+            const diffInSeconds = Math.floor((now - date) / 1000);
             
-            html += `
-                <tr>
-                    <td>${data.studentName}</td>
-                    <td>${data.studentId || 'N/A'}</td>
-                    <td>${formatDate(new Date(data.date))}</td>
-                    <td>${formatTime(timestamp)}</td>
-                    <td><span class="status-badge status-pending">Pending</span></td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="approve-btn" onclick="approveAttendance('${doc.id}', '${data.studentName}')">
-                                <i class="fas fa-check"></i> Approve
-                            </button>
-                            <button class="reject-btn" onclick="rejectAttendance('${doc.id}', '${data.studentName}')">
-                                <i class="fas fa-times"></i> Reject
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
-        
-        tableBody.innerHTML = html;
-        
-    } catch (error) {
-        console.error('Error loading pending attendance:', error);
-        showNotification('Error loading attendance data', 'error');
-    }
-}
-
-// Approve Attendance
-async function approveAttendance(attendanceId, studentName) {
-    try {
-        await db.collection('attendance').doc(attendanceId).update({
-            status: 'approved',
-            approvedBy: currentUser.uid,
-            approvedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        showNotification(`Approved attendance for ${studentName}`, 'success');
-        addActivity(`Approved attendance for ${studentName}`);
-        loadPendingAttendance();
-        loadStats();
-        
-    } catch (error) {
-        console.error('Error approving attendance:', error);
-        showNotification('Failed to approve attendance', 'error');
-    }
-}
-
-// Reject Attendance
-async function rejectAttendance(attendanceId, studentName) {
-    try {
-        await db.collection('attendance').doc(attendanceId).update({
-            status: 'rejected',
-            approvedBy: currentUser.uid,
-            approvedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        showNotification(`Rejected attendance for ${studentName}`, 'info');
-        addActivity(`Rejected attendance for ${studentName}`);
-        loadPendingAttendance();
-        loadStats();
-        
-    } catch (error) {
-        console.error('Error rejecting attendance:', error);
-        showNotification('Failed to reject attendance', 'error');
-    }
-}
-
-// Load Recent Activity
-async function loadRecentActivity() {
-    const activityList = document.getElementById('activityList');
-    if (!activityList) return;
-    
-    try {
-        // Get recent attendance activities
-        const snapshot = await db.collection('attendance')
-            .where('status', 'in', ['approved', 'rejected'])
-            .orderBy('approvedAt', 'desc')
-            .limit(5)
-            .get();
-        
-        let html = '';
-        
-        if (snapshot.empty) {
-            html = `
-                <div class="activity-item">
-                    <div class="activity-icon">
-                        <i class="fas fa-info-circle"></i>
-                    </div>
-                    <div class="activity-content">
-                        <p>Welcome to STK College! Start by adding students.</p>
-                        <span class="activity-time">Just now</span>
-                    </div>
-                </div>
-            `;
-        } else {
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                const approvedAt = data.approvedAt ? data.approvedAt.toDate() : new Date();
-                const timeAgo = getTimeAgo(approvedAt);
-                
-                const iconClass = data.status === 'approved' ? 'fa-check-circle' : 'fa-times-circle';
-                const action = data.status === 'approved' ? 'Approved' : 'Rejected';
-                
-                html += `
-                    <div class="activity-item">
-                        <div class="activity-icon">
-                            <i class="fas ${iconClass}"></i>
-                        </div>
-                        <div class="activity-content">
-                            <p>${action} attendance for ${data.studentName}</p>
-                            <span class="activity-time">${timeAgo}</span>
-                        </div>
-                    </div>
-                `;
-            });
+            if (diffInSeconds < 60) {
+                return 'Just now';
+            }
+            
+            const diffInMinutes = Math.floor(diffInSeconds / 60);
+            if (diffInMinutes < 60) {
+                return `${diffInMinutes} minute${diffInMinutes !== 1 ? 's' : ''} ago`;
+            }
+            
+            const diffInHours = Math.floor(diffInMinutes / 60);
+            if (diffInHours < 24) {
+                return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
+            }
+            
+            const diffInDays = Math.floor(diffInHours / 24);
+            if (diffInDays < 7) {
+                return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`;
+            }
+            
+            return date.toLocaleDateString();
         }
-        
-        activityList.innerHTML = html;
-        
-    } catch (error) {
-        console.error('Error loading activity:', error);
-    }
-}
 
-function getTimeAgo(date) {
-    const now = new Date();
-    const diffInSeconds = Math.floor((now - date) / 1000);
-    
-    if (diffInSeconds < 60) return 'Just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-    return `${Math.floor(diffInSeconds / 86400)}d ago`;
-}
+        // Show toast notification
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+                <span>${message}</span>
+            `;
+            
+            document.getElementById('toastContainer').appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
 
-function addActivity(message) {
-    const activityList = document.getElementById('activityList');
-    if (!activityList) return;
-    
-    const newActivity = `
-        <div class="activity-item fade-in">
-            <div class="activity-icon">
-                <i class="fas fa-plus-circle"></i>
-            </div>
-            <div class="activity-content">
-                <p>${message}</p>
-                <span class="activity-time">Just now</span>
-            </div>
-        </div>
-    `;
-    
-    activityList.insertAdjacentHTML('afterbegin', newActivity);
-    
-    // Remove old activities (keep only 10)
-    const activities = activityList.querySelectorAll('.activity-item');
-    if (activities.length > 10) {
-        activities[activities.length - 1].remove();
-    }
-}
+        // Logout function
+        function logout() {
+            auth.signOut()
+                .then(() => {
+                    window.location.href = 'login.html';
+                })
+                .catch((error) => {
+                    console.error('Error signing out:', error);
+                    showToast('Error signing out.', 'error');
+                });
+        }
 
-// Real-time listeners
-function setupRealtimeListeners() {
-    // Listen for new pending attendance
-    db.collection('attendance')
-        .where('status', '==', 'pending')
-        .onSnapshot((snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === 'added') {
-                    const data = change.doc.data();
-                    showNotification(`New attendance request from ${data.studentName}`, 'info');
-                    loadPendingAttendance();
-                    loadStats();
-                }
-            });
-        });
-}
+        // Initialize dashboard on load
+        window.onload = function() {
+            // Set default date values for filters
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('dateFilter').value = today;
+            document.getElementById('historyDateFilter').value = today;
+            document.getElementById('startDate').value = today;
+            document.getElementById('endDate').value = today;
+        };
