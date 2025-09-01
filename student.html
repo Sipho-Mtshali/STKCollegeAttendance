@@ -17,10 +17,15 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- Mobile Menu Toggle -->
+    <button class="menu-toggle" id="menuToggle" style="display: none;">
+        <i class="fas fa-bars"></i>
+    </button>
+
     <!-- Dashboard Container -->
     <div class="dashboard-container">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="logo-section">
                 <div class="logo">
                     <i class="fas fa-graduation-cap"></i>
@@ -33,25 +38,25 @@
 
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#" class="nav-link active">
+                    <a href="#" class="nav-link active" onclick="showSection('dashboard')">
                         <i class="fas fa-home"></i>
                         <span>Dashboard</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="scrollToAttendance()">
+                    <a href="#" class="nav-link" onclick="showSection('attendance')">
                         <i class="fas fa-hand-paper"></i>
                         <span>Mark Attendance</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="scrollToHistory()">
+                    <a href="#" class="nav-link" onclick="showSection('history')">
                         <i class="fas fa-history"></i>
                         <span>Attendance History</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="scrollToStats()">
+                    <a href="#" class="nav-link" onclick="showSection('stats')">
                         <i class="fas fa-chart-bar"></i>
                         <span>My Statistics</span>
                     </a>
@@ -82,48 +87,89 @@
                 </div>
             </header>
 
-            <!-- Stats Grid -->
-            <div class="stats-grid" id="statsSection">
-                <div class="stat-card">
-                    <div class="stat-icon blue">
-                        <i class="fas fa-calendar-check"></i>
+            <!-- Dashboard Section -->
+            <div id="dashboardSection">
+                <!-- Stats Grid -->
+                <div class="stats-grid" id="statsSection">
+                    <div class="stat-card">
+                        <div class="stat-icon blue">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalDays">0</h3>
+                            <p>Total Days</p>
+                        </div>
                     </div>
-                    <div class="stat-info">
-                        <h3 id="totalDays">0</h3>
-                        <p>Total Days</p>
+                    <div class="stat-card">
+                        <div class="stat-icon green">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="presentDays">0</h3>
+                            <p>Present Days</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orange">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="pendingDays">0</h3>
+                            <p>Pending Approval</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon red">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="absentDays">0</h3>
+                            <p>Absent Days</p>
+                        </div>
                     </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon green">
-                        <i class="fas fa-check-circle"></i>
+
+                <!-- Content Grid -->
+                <div class="content-grid">
+                    <!-- Attendance History -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Recent Attendance</h2>
+                            <span class="action" onclick="showSection('history')">View All</span>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Status</th>
+                                        <th>Approved By</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentAttendanceTableBody">
+                                    <!-- Recent attendance data will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div class="stat-info">
-                        <h3 id="presentDays">0</h3>
-                        <p>Present Days</p>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon orange">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <div class="stat-info">
-                        <h3 id="pendingDays">0</h3>
-                        <p>Pending Approval</p>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon red">
-                        <i class="fas fa-times-circle"></i>
-                    </div>
-                    <div class="stat-info">
-                        <h3 id="absentDays">0</h3>
-                        <p>Absent Days</p>
+
+                    <!-- Recent Activity -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Recent Activity</h2>
+                        </div>
+                        <div class="card-body">
+                            <ul class="activity-list" id="activityList">
+                                <!-- Activity data will be populated here -->
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Attendance Marking Section -->
-            <div class="attendance-marking" id="attendanceSection">
+            <div class="attendance-marking" id="attendanceSection" style="display: none;">
                 <h2><i class="fas fa-hand-paper"></i> Mark Today's Attendance</h2>
                 <p>Mark your attendance for today. Your teacher will verify your physical presence in class.</p>
                 
@@ -141,9 +187,8 @@
                 </div>
             </div>
 
-            <!-- Content Grid -->
-            <div class="content-grid">
-                <!-- Attendance History -->
+            <!-- Attendance History Section -->
+            <div id="historySection" style="display: none;">
                 <div class="card">
                     <div class="card-header">
                         <h2>Attendance History</h2>
@@ -165,6 +210,7 @@
                                     <th>Time</th>
                                     <th>Status</th>
                                     <th>Approved By</th>
+                                    <th>Remarks</th>
                                 </tr>
                             </thead>
                             <tbody id="attendanceTableBody">
@@ -173,16 +219,61 @@
                         </table>
                     </div>
                 </div>
+            </div>
 
-                <!-- Recent Activity -->
+            <!-- Statistics Section -->
+            <div id="statsSection" style="display: none;">
                 <div class="card">
                     <div class="card-header">
-                        <h2>Recent Activity</h2>
+                        <h2>Attendance Statistics</h2>
                     </div>
                     <div class="card-body">
-                        <ul class="activity-list" id="activityList">
-                            <!-- Activity data will be populated here -->
-                        </ul>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon blue">
+                                    <i class="fas fa-calendar-check"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="statsTotalDays">0</h3>
+                                    <p>Total Days</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon green">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="statsPresentDays">0</h3>
+                                    <p>Present Days</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon orange">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="statsPendingDays">0</h3>
+                                    <p>Pending Approval</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon red">
+                                    <i class="fas fa-times-circle"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="statsAbsentDays">0</h3>
+                                    <p>Absent Days</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 2rem;">
+                            <h3>Attendance Rate</h3>
+                            <div style="background: var(--gray-200); height: 24px; border-radius: 12px; margin: 1rem 0; overflow: hidden;">
+                                <div id="attendanceRateBar" style="height: 100%; background: var(--secondary); width: 0%; transition: width 0.5s ease;"></div>
+                            </div>
+                            <p id="attendanceRateText">0% attendance rate</p>
+                        </div>
                     </div>
                 </div>
             </div>
