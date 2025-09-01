@@ -1,365 +1,895 @@
-  // Firebase configuration - Replace with your actual config
-        const firebaseConfig = {
-        apiKey: "AIzaSyDV1Wcl9a19chq6JsVR-TCDQhT0tS1BzFo",
-        authDomain: "stkcollegeattendance.firebaseapp.com",
-        projectId: "stkcollegeattendance",
-        storageBucket: "stkcollegeattendance.firebasestorage.app",
-        messagingSenderId: "574527402732",
-        appId: "1:574527402732:web:ecedfb8d3e9aa693776bc9",
-        measurementId: "G-8SDMWZ8H9Z"
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyDV1Wcl9a19chq6JsVR-TCDQhT0tS1BzFo",
+    authDomain: "stkcollegeattendance.firebaseapp.com",
+    projectId: "stkcollegeattendance",
+    storageBucket: "stkcollegeattendance.firebasestorage.app",
+    messagingSenderId: "574527402732",
+    appId: "1:574527402732:web:ecedfb8d3e9aa693776bc9",
+    measurementId: "G-8SDMWZ8H9Z"
 };
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-        // Check authentication state
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                // User is signed in
-                document.getElementById('userNameDisplay').textContent = user.displayName || user.email;
-                checkAdminRole(user.uid);
-                loadDashboardData();
-                setupRealtimeListeners();
-            } else {
-                // No user is signed in, redirect to login
-                window.location.href = 'login.html';
-            }
-        });
+// Global variables
+let currentUser = null;
+let allUsers = [];
+let allAttendance = [];
 
-        // Check if user has admin role
-        function checkAdminRole(uid) {
-            db.collection('users').doc(uid).get()
-                .then((doc) => {
-                    if (doc.exists) {
-                        const userData = doc.data();
-                        if (userData.role !== 'admin') {
-                            showToast('Access denied. Admin privileges required.', 'error');
-                            setTimeout(() => {
-                                logout();
-                            }, 2000);
-                        }
-                    }
-                })
-                .catch((error) => {
-                    console.error('Error checking user role:', error);
-                    showToast('Error verifying permissions.', 'error');
-                });
-        }
+// Check authentication state
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        // User is signed in
+        currentUser = user;
+        document.getElementById('userNameDisplay').textContent = user.displayName || user.email;
+        checkAdminRole(user.uid);
+        loadDashboardData();
+        setupRealtimeListeners();
+        setupNavigation();
+    } else {
+        // No user is signed in, redirect to login
+        window.location.href = 'login.html';
+    }
+});
 
-        // Load dashboard data
-        function loadDashboardData() {
-            // Load user counts
-            db.collection('users').where('role', '==', 'student').get()
-                .then((querySnapshot) => {
-                    document.getElementById('totalStudents').textContent = querySnapshot.size;
-                });
-
-            db.collection('users').where('role', '==', 'teacher').get()
-                .then((querySnapshot) => {
-                    document.getElementById('totalTeachers').textContent = querySnapshot.size;
-                });
-
-            // Load attendance data
-            db.collection('attendance')
-                .orderBy('timestamp', 'desc')
-                .limit(5)
-                .get()
-                .then((querySnapshot) => {
-                    const tbody = document.getElementById('attendanceTableBody');
-                    tbody.innerHTML = '';
-                    
-                    querySnapshot.forEach((doc) => {
-                        const data = doc.data();
-                        const row = document.createElement('tr');
-                        
-                        row.innerHTML = `
-                            <td>${data.studentName}</td>
-                            <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
-                            <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
-                            <td><span class="status-badge ${data.status}">${data.status}</span></td>
-                            <td>
-                                <button class="btn" onclick="downloadAttendanceRecord('${doc.id}')" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
-                                    <i class="fas fa-download"></i>
-                                </button>
-                            </td>
-                        `;
-                        
-                        tbody.appendChild(row);
-                    });
-                });
-
-            // Load recent activities
-            db.collection('activities')
-                .orderBy('timestamp', 'desc')
-                .limit(4)
-                .get()
-                .then((querySnapshot) => {
-                    const activityList = document.getElementById('activityList');
-                    activityList.innerHTML = '';
-                    
-                    querySnapshot.forEach((doc) => {
-                        const data = doc.data();
-                        const item = document.createElement('li');
-                        item.className = 'activity-item';
-                        
-                        item.innerHTML = `
-                            <div class="activity-icon ${data.type === 'user' ? 'blue' : 'green'}">
-                                <i class="fas ${data.icon}"></i>
-                            </div>
-                            <div class="activity-content">
-                                <p>${data.message}</p>
-                                <span class="activity-time">${formatTimeAgo(data.timestamp.toDate())}</span>
-                            </div>
-                        `;
-                        
-                        activityList.appendChild(item);
-                    });
-                });
-        }
-
-        // Set up realtime listeners
-        function setupRealtimeListeners() {
-            // Listen for new attendance records
-            db.collection('attendance')
-                .orderBy('timestamp', 'desc')
-                .limit(5)
-                .onSnapshot((snapshot) => {
-                    const tbody = document.getElementById('attendanceTableBody');
-                    tbody.innerHTML = '';
-                    
-                    snapshot.forEach((doc) => {
-                        const data = doc.data();
-                        const row = document.createElement('tr');
-                        
-                        row.innerHTML = `
-                            <td>${data.studentName}</td>
-                            <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
-                            <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
-                            <td><span class="status-badge ${data.status}">${data.status}</span></td>
-                            <td>
-                                <button class="btn" onclick="downloadAttendanceRecord('${doc.id}')" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
-                                    <i class="fas fa-download"></i>
-                                </button>
-                            </td>
-                        `;
-                        
-                        tbody.appendChild(row);
-                    });
-                });
-
-            // Listen for new activities
-            db.collection('activities')
-                .orderBy('timestamp', 'desc')
-                .limit(4)
-                .onSnapshot((snapshot) => {
-                    const activityList = document.getElementById('activityList');
-                    activityList.innerHTML = '';
-                    
-                    snapshot.forEach((doc) => {
-                        const data = doc.data();
-                        const item = document.createElement('li');
-                        item.className = 'activity-item';
-                        
-                        item.innerHTML = `
-                            <div class="activity-icon ${data.type === 'user' ? 'blue' : 'green'}">
-                                <i class="fas ${data.icon}"></i>
-                            </div>
-                            <div class="activity-content">
-                                <p>${data.message}</p>
-                                <span class="activity-time">${formatTimeAgo(data.timestamp.toDate())}</span>
-                            </div>
-                        `;
-                        
-                        activityList.appendChild(item);
-                    });
-                });
-        }
-
-        // Format time ago
-        function formatTimeAgo(date) {
-            const now = new Date();
-            const seconds = Math.floor((now - date) / 1000);
-            
-            if (seconds < 60) return `${seconds} seconds ago`;
-            
-            const minutes = Math.floor(seconds / 60);
-            if (minutes < 60) return `${minutes} minutes ago`;
-            
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return `${hours} hours ago`;
-            
-            const days = Math.floor(hours / 24);
-            return `${days} days ago`;
-        }
-
-        // Add user form submission
-        document.getElementById('addUserForm').addEventListener('submit', function(e) {
+// Setup navigation
+function setupNavigation() {
+    // Add click event listeners to all nav links
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
             e.preventDefault();
             
-            const userName = document.getElementById('userName').value;
-            const userEmail = document.getElementById('userEmail').value;
-            const userRole = document.getElementById('userRole').value;
-            const userPassword = document.getElementById('userPassword').value;
-            const submitButton = document.getElementById('submitButton');
+            // Remove active class from all links
+            navLinks.forEach(l => l.classList.remove('active'));
             
-            // Show loading state
-            submitButton.innerHTML = '<span class="spinner"></span> Adding User...';
-            submitButton.disabled = true;
+            // Add active class to clicked link
+            this.classList.add('active');
             
-            // Create user with Firebase Auth
-            auth.createUserWithEmailAndPassword(userEmail, userPassword)
-                .then((userCredential) => {
-                    // Add user data to Firestore
-                    return db.collection('users').doc(userCredential.user.uid).set({
-                        name: userName,
-                        email: userEmail,
-                        role: userRole,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                })
-                .then(() => {
-                    // Log activity
-                    return db.collection('activities').add({
-                        message: `New ${userRole} registered: ${userName}`,
-                        icon: userRole === 'student' ? 'fa-user-graduate' : 
-                              userRole === 'teacher' ? 'fa-chalkboard-teacher' : 'fa-user-cog',
-                        type: 'user',
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                })
-                .then(() => {
-                    showToast('User added successfully!', 'success');
-                    document.getElementById('addUserForm').reset();
-                })
-                .catch((error) => {
-                    console.error('Error adding user:', error);
-                    showToast(`Error: ${error.message}`, 'error');
-                })
-                .finally(() => {
-                    // Reset button state
-                    submitButton.innerHTML = '<i class="fas fa-plus"></i> Add User';
-                    submitButton.disabled = false;
-                });
+            // Show the corresponding section
+            const sectionId = this.getAttribute('data-section');
+            showSection(sectionId);
+        });
+    });
+}
+
+// Show section based on ID
+function showSection(sectionId) {
+    // Hide all sections
+    document.querySelectorAll('.section-content').forEach(section => {
+        section.style.display = 'none';
+    });
+    
+    // Show selected section
+    document.getElementById(`${sectionId}Section`).style.display = 'block';
+    
+    // Update page title and subtitle
+    const pageTitle = document.getElementById('pageTitle');
+    const pageSubtitle = document.getElementById('pageSubtitle');
+    
+    switch(sectionId) {
+        case 'dashboard':
+            pageTitle.textContent = 'Admin Dashboard';
+            pageSubtitle.textContent = 'Welcome back, Admin! Here\'s what\'s happening today.';
+            loadDashboardData();
+            break;
+        case 'users':
+            pageTitle.textContent = 'Manage Users';
+            pageSubtitle.textContent = 'View and manage all system users.';
+            loadUsers();
+            break;
+        case 'attendance':
+            pageTitle.textContent = 'Attendance Management';
+            pageSubtitle.textContent = 'View and manage attendance records.';
+            loadAllAttendance();
+            break;
+        case 'reports':
+            pageTitle.textContent = 'Generate Reports';
+            pageSubtitle.textContent = 'Create and download system reports.';
+            break;
+        case 'settings':
+            pageTitle.textContent = 'System Settings';
+            pageSubtitle.textContent = 'Configure system settings and preferences.';
+            loadSettings();
+            break;
+    }
+}
+
+// Check if user has admin role
+function checkAdminRole(uid) {
+    db.collection('users').doc(uid).get()
+        .then((doc) => {
+            if (doc.exists) {
+                const userData = doc.data();
+                if (userData.role !== 'admin') {
+                    showToast('Access denied. Admin privileges required.', 'error');
+                    setTimeout(() => {
+                        logout();
+                    }, 2000);
+                }
+            }
+        })
+        .catch((error) => {
+            console.error('Error checking user role:', error);
+            showToast('Error verifying permissions.', 'error');
+        });
+}
+
+// Load dashboard data
+function loadDashboardData() {
+    // Load user counts
+    db.collection('users').where('role', '==', 'student').get()
+        .then((querySnapshot) => {
+            document.getElementById('totalStudents').textContent = querySnapshot.size;
         });
 
-        // Export attendance as PDF
-        function exportAttendancePDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            
-            // Add title
-            doc.setFontSize(18);
-            doc.text('STK College - Attendance Report', 14, 22);
-            
-            // Add date
-            doc.setFontSize(12);
-            doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
-            
-            // Get attendance data
-            db.collection('attendance')
-                .orderBy('timestamp', 'desc')
-                .get()
-                .then((querySnapshot) => {
-                    const tableData = [];
-                    
-                    querySnapshot.forEach((doc) => {
-                        const data = doc.data();
-                        tableData.push([
-                            data.studentName,
-                            new Date(data.timestamp.toDate()).toLocaleDateString(),
-                            new Date(data.timestamp.toDate()).toLocaleTimeString(),
-                            data.status
-                        ]);
-                    });
-                    
-                    // Add table to PDF
-                    doc.autoTable({
-                        head: [['Student', 'Date', 'Time', 'Status']],
-                        body: tableData,
-                        startY: 40,
-                        styles: { fontSize: 10 },
-                        headStyles: { fillColor: [79, 70, 229] }
-                    });
-                    
-                    // Save the PDF
-                    doc.save(`attendance-report-${new Date().toISOString().split('T')[0]}.pdf`);
-                    showToast('PDF exported successfully!', 'success');
-                })
-                .catch((error) => {
-                    console.error('Error generating PDF:', error);
-                    showToast('Error generating PDF report.', 'error');
-                });
-        }
+    db.collection('users').where('role', '==', 'teacher').get()
+        .then((querySnapshot) => {
+            document.getElementById('totalTeachers').textContent = querySnapshot.size;
+        });
 
-        // Download individual attendance record
-        function downloadAttendanceRecord(recordId) {
-            db.collection('attendance').doc(recordId).get()
-                .then((doc) => {
-                    if (doc.exists) {
-                        const data = doc.data();
-                        const { jsPDF } = window.jspdf;
-                        const pdfDoc = new jsPDF();
-                        
-                        pdfDoc.setFontSize(16);
-                        pdfDoc.text('STK College - Attendance Record', 14, 22);
-                        
-                        pdfDoc.setFontSize(12);
-                        pdfDoc.text(`Student: ${data.studentName}`, 14, 32);
-                        pdfDoc.text(`Date: ${new Date(data.timestamp.toDate()).toLocaleDateString()}`, 14, 40);
-                        pdfDoc.text(`Time: ${new Date(data.timestamp.toDate()).toLocaleTimeString()}`, 14, 48);
-                        pdfDoc.text(`Status: ${data.status}`, 14, 56);
-                        
-                        if (data.notes) {
-                            pdfDoc.text(`Notes: ${data.notes}`, 14, 64);
-                        }
-                        
-                        pdfDoc.save(`attendance-${data.studentName}-${new Date(data.timestamp.toDate()).toISOString().split('T')[0]}.pdf`);
-                        showToast('Record downloaded successfully!', 'success');
-                    }
-                })
-                .catch((error) => {
-                    console.error('Error downloading record:', error);
-                    showToast('Error downloading record.', 'error');
-                });
-        }
+    // Load pending approvals count
+    db.collection('attendance').where('status', '==', 'pending').get()
+        .then((querySnapshot) => {
+            document.getElementById('pendingApprovals').textContent = querySnapshot.size;
+        });
 
-        // Show toast notification
-        function showToast(message, type = 'success') {
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `
-                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
-                ${message}
-            `;
+    // Load attendance rate (calculate based on approved/total)
+    db.collection('attendance').get()
+        .then((querySnapshot) => {
+            const totalRecords = querySnapshot.size;
+            let approvedRecords = 0;
             
-            document.getElementById('toastContainer').appendChild(toast);
-            
-            // Remove toast after 3 seconds
-            setTimeout(() => {
-                toast.remove();
-            }, 3000);
-        }
-
-        // Logout function
-        function logout() {
-            auth.signOut()
-                .then(() => {
-                    window.location.href = 'login.html';
-                })
-                .catch((error) => {
-                    console.error('Error signing out:', error);
-                    showToast('Error signing out.', 'error');
-                });
-        }
-
-        // Initialize dashboard after DOM is loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check if user is logged in
-            auth.onAuthStateChanged((user) => {
-                if (!user) {
-                    window.location.href = 'login.html';
+            querySnapshot.forEach(doc => {
+                if (doc.data().status === 'approved') {
+                    approvedRecords++;
                 }
             });
+            
+            const attendanceRate = totalRecords > 0 ? Math.round((approvedRecords / totalRecords) * 100) : 0;
+            document.getElementById('attendanceRate').textContent = `${attendanceRate}%`;
         });
+
+    // Load attendance data
+    db.collection('attendance')
+        .orderBy('timestamp', 'desc')
+        .limit(5)
+        .get()
+        .then((querySnapshot) => {
+            const tbody = document.getElementById('attendanceTableBody');
+            tbody.innerHTML = '';
+            
+            if (querySnapshot.empty) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 2rem;">
+                            <i class="fas fa-inbox" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
+                            <p style="color: var(--gray-500);">No attendance records found</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${data.studentName}</td>
+                    <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
+                    <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
+                    <td><span class="status-badge ${data.status}">${data.status}</span></td>
+                    <td>
+                        <button class="btn" onclick="downloadAttendanceRecord('${doc.id}')" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        });
+
+    // Load recent activities
+    db.collection('activities')
+        .orderBy('timestamp', 'desc')
+        .limit(4)
+        .get()
+        .then((querySnapshot) => {
+            const activityList = document.getElementById('activityList');
+            activityList.innerHTML = '';
+            
+            if (querySnapshot.empty) {
+                activityList.innerHTML = `
+                    <li style="text-align: center; padding: 1rem; color: var(--gray-500);">
+                        <i class="fas fa-info-circle" style="display: block; font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                        No recent activities
+                    </li>
+                `;
+                return;
+            }
+            
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const item = document.createElement('li');
+                item.className = 'activity-item';
+                
+                item.innerHTML = `
+                    <div class="activity-icon ${data.type === 'user' ? 'blue' : 'green'}">
+                        <i class="fas ${data.icon}"></i>
+                    </div>
+                    <div class="activity-content">
+                        <p>${data.message}</p>
+                        <span class="activity-time">${formatTimeAgo(data.timestamp.toDate())}</span>
+                    </div>
+                `;
+                
+                activityList.appendChild(item);
+            });
+        });
+}
+
+// Load all users
+function loadUsers() {
+    db.collection('users').get()
+        .then((querySnapshot) => {
+            allUsers = [];
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+            
+            if (querySnapshot.empty) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 2rem;">
+                            <i class="fas fa-users" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
+                            <p style="color: var(--gray-500);">No users found</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            querySnapshot.forEach((doc) => {
+                const userData = {
+                    id: doc.id,
+                    ...doc.data()
+                };
+                allUsers.push(userData);
+                
+                const row = document.createElement('tr');
+                const createdDate = userData.createdAt ? new Date(userData.createdAt.toDate()).toLocaleDateString() : 'N/A';
+                
+                row.innerHTML = `
+                    <td>${userData.name || 'N/A'}</td>
+                    <td>${userData.email}</td>
+                    <td><span class="status-badge">${userData.role}</span></td>
+                    <td>${createdDate}</td>
+                    <td><span class="status-badge approved">Active</span></td>
+                    <td>
+                        <button class="btn btn-sm" onclick="editUser('${doc.id}')" title="Edit User">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteUser('${doc.id}')" title="Delete User">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        })
+        .catch((error) => {
+            console.error('Error loading users:', error);
+            showToast('Error loading users.', 'error');
+        });
+}
+
+// Filter users
+function filterUsers() {
+    const roleFilter = document.getElementById('userRoleFilter').value;
+    const searchFilter = document.getElementById('userSearch').value.toLowerCase();
+    const rows = document.getElementById('usersTableBody').querySelectorAll('tr');
+    
+    rows.forEach((row) => {
+        if (row.cells.length < 6) return; // Skip the no-data row
+        
+        const role = row.cells[2].textContent.toLowerCase();
+        const name = row.cells[0].textContent.toLowerCase();
+        const email = row.cells[1].textContent.toLowerCase();
+        
+        const roleMatch = roleFilter === 'all' || role === roleFilter;
+        const searchMatch = !searchFilter || name.includes(searchFilter) || email.includes(searchFilter);
+        
+        if (roleMatch && searchMatch) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Load all attendance
+function loadAllAttendance() {
+    db.collection('attendance')
+        .orderBy('timestamp', 'desc')
+        .get()
+        .then((querySnapshot) => {
+            allAttendance = [];
+            const tbody = document.getElementById('allAttendanceTableBody');
+            tbody.innerHTML = '';
+            
+            if (querySnapshot.empty) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
+                            <i class="fas fa-clipboard-check" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
+                            <p style="color: var(--gray-500);">No attendance records found</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            querySnapshot.forEach((doc) => {
+                const data = {
+                    id: doc.id,
+                    ...doc.data()
+                };
+                allAttendance.push(data);
+                
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${data.studentName}</td>
+                    <td>${data.studentId || 'N/A'}</td>
+                    <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
+                    <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
+                    <td><span class="status-badge ${data.status}">${data.status}</span></td>
+                    <td>${data.approvedBy || '-'}</td>
+                    <td>
+                        ${data.status === 'pending' ? `
+                            <button class="btn btn-primary btn-sm" onclick="approveAttendance('${doc.id}')" title="Approve">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="rejectAttendance('${doc.id}')" title="Reject">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-sm" onclick="downloadAttendanceRecord('${doc.id}')" title="Download">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        })
+        .catch((error) => {
+            console.error('Error loading attendance:', error);
+            showToast('Error loading attendance records.', 'error');
+        });
+}
+
+// Filter attendance
+function filterAttendance() {
+    const dateFilter = document.getElementById('attendanceDateFilter').value;
+    const statusFilter = document.getElementById('attendanceStatusFilter').value;
+    const studentFilter = document.getElementById('attendanceStudentFilter').value.toLowerCase();
+    const rows = document.getElementById('allAttendanceTableBody').querySelectorAll('tr');
+    
+    rows.forEach((row) => {
+        if (row.cells.length < 7) return; // Skip the no-data row
+        
+        const date = row.cells[2].textContent;
+        const status = row.cells[4].querySelector('.status-badge').textContent.toLowerCase();
+        const studentName = row.cells[0].textContent.toLowerCase();
+        
+        const dateMatch = !dateFilter || date === new Date(dateFilter).toLocaleDateString();
+        const statusMatch = statusFilter === 'all' || status === statusFilter;
+        const studentMatch = !studentFilter || studentName.includes(studentFilter);
+        
+        if (dateMatch && statusMatch && studentMatch) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Approve attendance
+function approveAttendance(attendanceId) {
+    db.collection('attendance').doc(attendanceId).get()
+        .then((doc) => {
+            if (doc.exists) {
+                const data = doc.data();
+                
+                return db.collection('attendance').doc(attendanceId).update({
+                    status: 'approved',
+                    approvedBy: currentUser.displayName || currentUser.email,
+                    approvedAt: new Date()
+                }).then(() => {
+                    showToast('Attendance approved successfully.', 'success');
+                    loadAllAttendance();
+                    
+                    // Add activity log
+                    db.collection('activities').add({
+                        type: 'attendance',
+                        icon: 'fa-check-circle',
+                        message: `Admin approved attendance for ${data.studentName}`,
+                        timestamp: new Date(),
+                        userId: currentUser.uid,
+                        userName: currentUser.displayName || currentUser.email
+                    });
+                });
+            }
+        })
+        .catch((error) => {
+            console.error('Error approving attendance:', error);
+            showToast('Error approving attendance.', 'error');
+        });
+}
+
+// Reject attendance
+function rejectAttendance(attendanceId) {
+    db.collection('attendance').doc(attendanceId).get()
+        .then((doc) => {
+            if (doc.exists) {
+                const data = doc.data();
+                
+                return db.collection('attendance').doc(attendanceId).update({
+                    status: 'rejected',
+                    approvedBy: currentUser.displayName || currentUser.email,
+                    approvedAt: new Date()
+                }).then(() => {
+                    showToast('Attendance rejected.', 'success');
+                    loadAllAttendance();
+                    
+                    // Add activity log
+                    db.collection('activities').add({
+                        type: 'attendance',
+                        icon: 'fa-times-circle',
+                        message: `Admin rejected attendance for ${data.studentName}`,
+                        timestamp: new Date(),
+                        userId: currentUser.uid,
+                        userName: currentUser.displayName || currentUser.email
+                    });
+                });
+            }
+        })
+        .catch((error) => {
+            console.error('Error rejecting attendance:', error);
+            showToast('Error rejecting attendance.', 'error');
+        });
+}
+
+// Load settings
+function loadSettings() {
+    // This would typically load from a settings collection in Firestore
+    // For now, we'll set some default values
+    document.getElementById('schoolName').value = 'STK College';
+    document.getElementById('attendanceHours').value = '7:00 AM - 5:00 PM';
+    document.getElementById('adminEmail').value = 'admin@stkcollege.edu';
+    document.getElementById('systemTimezone').value = 'UTC';
+}
+
+// Save settings
+function saveSettings() {
+    const schoolName = document.getElementById('schoolName').value;
+    const attendanceHours = document.getElementById('attendanceHours').value;
+    const adminEmail = document.getElementById('adminEmail').value;
+    const timezone = document.getElementById('systemTimezone').value;
+    
+    // In a real application, you would save these to Firestore
+    showToast('Settings saved successfully.', 'success');
+    
+    // Add activity log
+    db.collection('activities').add({
+        type: 'settings',
+        icon: 'fa-cog',
+        message: 'Admin updated system settings',
+        timestamp: new Date(),
+        userId: currentUser.uid,
+        userName: currentUser.displayName || currentUser.email
+    });
+}
+
+// Generate attendance report
+function generateAttendanceReport() {
+    const startDate = document.getElementById('reportStartDate').value;
+    const endDate = document.getElementById('reportEndDate').value;
+    const reportType = document.getElementById('reportType').value;
+    
+    if (!startDate || !endDate) {
+        showToast('Please select both start and end dates.', 'error');
+        return;
+    }
+    
+    let query = db.collection('attendance')
+        .where('date', '>=', startDate)
+        .where('date', '<=', endDate);
+    
+    if (reportType !== 'all') {
+        query = query.where('status', '==', reportType);
+    }
+    
+    query.get()
+        .then((querySnapshot) => {
+            const attendanceData = [];
+            
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                attendanceData.push({
+                    studentName: data.studentName,
+                    studentId: data.studentId || 'N/A',
+                    date: data.date,
+                    time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
+                    status: data.status,
+                    approvedBy: data.approvedBy || 'N/A'
+                });
+            });
+            
+            generatePDFReport(attendanceData, `Attendance Report - ${startDate} to ${endDate}`);
+        })
+        .catch((error) => {
+            console.error('Error generating report:', error);
+            showToast('Error generating report.', 'error');
+        });
+}
+
+// Generate user report
+function generateUserReport() {
+    db.collection('users').get()
+        .then((querySnapshot) => {
+            const userData = [];
+            const roleCounts = {
+                admin: 0,
+                teacher: 0,
+                student: 0
+            };
+            
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                userData.push({
+                    name: data.name || 'N/A',
+                    email: data.email,
+                    role: data.role,
+                    createdAt: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A'
+                });
+                
+                if (roleCounts.hasOwnProperty(data.role)) {
+                    roleCounts[data.role]++;
+                }
+            });
+            
+            generatePDFReport(userData, 'User Statistics Report');
+        })
+        .catch((error) => {
+            console.error('Error generating user report:', error);
+            showToast('Error generating user report.', 'error');
+        });
+}
+
+// Generate system report
+function generateSystemReport() {
+    // This would typically gather various system statistics
+    const systemData = [
+        { metric: 'Total Users', value: allUsers.length },
+        { metric: 'Total Attendance Records', value: allAttendance.length },
+        { metric: 'Pending Approvals', value: allAttendance.filter(a => a.status === 'pending').length },
+        { metric: 'System Uptime', value: '99.9%' }
+    ];
+    
+    generatePDFReport(systemData, 'System Summary Report');
+}
+
+// Generate PDF report
+function generatePDFReport(data, title) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFontSize(18);
+    doc.text(title, 14, 15);
+    
+    // Add date
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+    
+    // Add data as table
+    doc.autoTable({
+        startY: 30,
+        head: [Object.keys(data[0])],
+        body: data.map(item => Object.values(item))
+    });
+    
+    // Save the PDF
+    doc.save(`${title.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+    showToast(`${title} downloaded successfully.`, 'success');
+}
+
+// Download individual attendance record
+function downloadAttendanceRecord(attendanceId) {
+    db.collection('attendance').doc(attendanceId).get()
+        .then((doc) => {
+            if (doc.exists) {
+                const data = doc.data();
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Add title
+                doc.setFontSize(16);
+                doc.text('Attendance Record', 14, 15);
+                
+                // Add details
+                doc.setFontSize(10);
+                doc.text(`Student: ${data.studentName}`, 14, 25);
+                doc.text(`Student ID: ${data.studentId || 'N/A'}`, 14, 32);
+                doc.text(`Date: ${new Date(data.timestamp.toDate()).toLocaleDateString()}`, 14, 39);
+                doc.text(`Time: ${new Date(data.timestamp.toDate()).toLocaleTimeString()}`, 14, 46);
+                doc.text(`Status: ${data.status}`, 14, 53);
+                
+                if (data.approvedBy) {
+                    doc.text(`Approved By: ${data.approvedBy}`, 14, 60);
+                    doc.text(`Approved At: ${new Date(data.approvedAt.toDate()).toLocaleString()}`, 14, 67);
+                }
+                
+                // Save the PDF
+                doc.save(`Attendance_${data.studentName}_${new Date(data.timestamp.toDate()).toISOString().split('T')[0]}.pdf`);
+                showToast('Attendance record downloaded.', 'success');
+            }
+        })
+        .catch((error) => {
+            console.error('Error downloading record:', error);
+            showToast('Error downloading record.', 'error');
+        });
+}
+
+// Export attendance as PDF
+function exportAttendancePDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFontSize(16);
+    doc.text('Recent Attendance Records', 14, 15);
+    
+    // Get table data
+    const table = document.getElementById('attendanceTableBody');
+    const rows = table.querySelectorAll('tr');
+    const data = [];
+    
+    rows.forEach(row => {
+        if (row.cells.length === 5) {
+            data.push([
+                row.cells[0].textContent,
+                row.cells[1].textContent,
+                row.cells[2].textContent,
+                row.cells[3].textContent
+            ]);
+        }
+    });
+    
+    // Add table
+    doc.autoTable({
+        startY: 20,
+        head: [['Student', 'Date', 'Time', 'Status']],
+        body: data
+    });
+    
+    // Save the PDF
+    doc.save('Recent_Attendance_Records.pdf');
+    showToast('Attendance exported as PDF.', 'success');
+}
+
+// Add new user
+document.getElementById('addUserForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('userName').value;
+    const email = document.getElementById('userEmail').value;
+    const role = document.getElementById('userRole').value;
+    const password = document.getElementById('userPassword').value;
+    
+    const submitButton = document.getElementById('submitButton');
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding User...';
+    
+    // Create user with Firebase Auth
+    auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            const user = userCredential.user;
+            
+            // Add user data to Firestore
+            return db.collection('users').doc(user.uid).set({
+                name: name,
+                email: email,
+                role: role,
+                createdAt: new Date(),
+                createdBy: currentUser.uid
+            }).then(() => {
+                // Update user profile
+                return user.updateProfile({
+                    displayName: name
+                });
+            });
+        })
+        .then(() => {
+            showToast('User created successfully.', 'success');
+            document.getElementById('addUserForm').reset();
+            
+            // Add activity log
+            db.collection('activities').add({
+                type: 'user',
+                icon: 'fa-user-plus',
+                message: `Admin created new ${role} user: ${name}`,
+                timestamp: new Date(),
+                userId: currentUser.uid,
+                userName: currentUser.displayName || currentUser.email
+            });
+            
+            // Reload dashboard data
+            loadDashboardData();
+        })
+        .catch((error) => {
+            console.error('Error creating user:', error);
+            showToast(`Error creating user: ${error.message}`, 'error');
+        })
+        .finally(() => {
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-plus"></i> Add User';
+        });
+});
+
+// Edit user
+function editUser(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    
+    if (user) {
+        const newName = prompt('Enter new name:', user.name || '');
+        if (newName === null) return;
+        
+        const newRole = prompt('Enter new role (admin/teacher/student):', user.role);
+        if (newRole === null) return;
+        
+        if (!['admin', 'teacher', 'student'].includes(newRole)) {
+            showToast('Invalid role. Must be admin, teacher, or student.', 'error');
+            return;
+        }
+        
+        db.collection('users').doc(userId).update({
+            name: newName,
+            role: newRole
+        })
+        .then(() => {
+            showToast('User updated successfully.', 'success');
+            loadUsers();
+            
+            // Add activity log
+            db.collection('activities').add({
+                type: 'user',
+                icon: 'fa-user-edit',
+                message: `Admin updated user: ${user.email}`,
+                timestamp: new Date(),
+                userId: currentUser.uid,
+                userName: currentUser.displayName || currentUser.email
+            });
+        })
+        .catch((error) => {
+            console.error('Error updating user:', error);
+            showToast('Error updating user.', 'error');
+        });
+    }
+}
+
+// Delete user
+function deleteUser(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    
+    if (user && confirm(`Are you sure you want to delete user: ${user.email}?`)) {
+        // Delete from Firestore
+        db.collection('users').doc(userId).delete()
+            .then(() => {
+                // Delete from Firebase Auth
+                return auth.deleteUser(userId);
+            })
+            .then(() => {
+                showToast('User deleted successfully.', 'success');
+                loadUsers();
+                
+                // Add activity log
+                db.collection('activities').add({
+                    type: 'user',
+                    icon: 'fa-user-times',
+                    message: `Admin deleted user: ${user.email}`,
+                    timestamp: new Date(),
+                    userId: currentUser.uid,
+                    userName: currentUser.displayName || currentUser.email
+                });
+            })
+            .catch((error) => {
+                console.error('Error deleting user:', error);
+                showToast('Error deleting user.', 'error');
+            });
+    }
+}
+
+// Setup realtime listeners
+function setupRealtimeListeners() {
+    // Listen for new users
+    db.collection('users').onSnapshot((snapshot) => {
+        loadDashboardData();
+    });
+    
+    // Listen for new attendance records
+    db.collection('attendance').onSnapshot((snapshot) => {
+        loadDashboardData();
+    });
+}
+
+// Format time ago
+function formatTimeAgo(date) {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) {
+        return 'just now';
+    }
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+        return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+    }
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+        return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    }
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) {
+        return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+    }
+    
+    return date.toLocaleDateString();
+}
+
+// Show toast notification
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+            <span>${message}</span>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.parentElement.removeChild(toast);
+        }
+    }, 5000);
+}
+
+// Logout function
+function logout() {
+    auth.signOut()
+        .then(() => {
+            window.location.href = 'login.html';
+        })
+        .catch((error) => {
+            console.error('Error signing out:', error);
+            showToast('Error signing out.', 'error');
+        });
+}

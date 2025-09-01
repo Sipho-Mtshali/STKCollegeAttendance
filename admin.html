@@ -11,7 +11,7 @@
     <!-- jsPDF for PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-    <script src="admin.js"></script>
+    <script src="admin.js" defer></script>
     <link rel="stylesheet" href="admin.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -36,31 +36,31 @@
 
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#" class="nav-link active">
+                    <a href="#" class="nav-link active" data-section="dashboard">
                         <i class="fas fa-home"></i>
                         <span>Dashboard</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">
+                    <a href="#" class="nav-link" data-section="users">
                         <i class="fas fa-users"></i>
                         <span>Manage Users</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">
+                    <a href="#" class="nav-link" data-section="attendance">
                         <i class="fas fa-clipboard-check"></i>
                         <span>Attendance</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">
+                    <a href="#" class="nav-link" data-section="reports">
                         <i class="fas fa-chart-bar"></i>
                         <span>Reports</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">
+                    <a href="#" class="nav-link" data-section="settings">
                         <i class="fas fa-cog"></i>
                         <span>Settings</span>
                     </a>
@@ -73,8 +73,8 @@
             <!-- Header -->
             <header class="header">
                 <div class="page-title">
-                    <h1>Admin Dashboard</h1>
-                    <p>Welcome back, Admin! Here's what's happening today.</p>
+                    <h1 id="pageTitle">Admin Dashboard</h1>
+                    <p id="pageSubtitle">Welcome back, Admin! Here's what's happening today.</p>
                 </div>
                 <div class="user-menu">
                     <div class="user-info">
@@ -91,120 +91,312 @@
                 </div>
             </header>
 
-            <!-- Stats Grid -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon blue">
-                        <i class="fas fa-users"></i>
+            <!-- Dashboard Section -->
+            <div id="dashboardSection" class="section-content">
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon blue">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalStudents">0</h3>
+                            <p>Total Students</p>
+                        </div>
                     </div>
-                    <div class="stat-info">
-                        <h3 id="totalStudents">0</h3>
-                        <p>Total Students</p>
+                    <div class="stat-card">
+                        <div class="stat-icon green">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalTeachers">0</h3>
+                            <p>Teachers</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orange">
+                            <i class="fas fa-clipboard-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="attendanceRate">0%</h3>
+                            <p>Attendance Rate</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon red">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="pendingApprovals">0</h3>
+                            <p>Pending Approvals</p>
+                        </div>
                     </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon green">
-                        <i class="fas fa-chalkboard-teacher"></i>
+
+                <!-- Content Grid -->
+                <div class="content-grid">
+                    <!-- Recent Attendance -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Recent Attendance</h2>
+                            <span class="action" onclick="exportAttendancePDF()">Export PDF</span>
+                        </div>
+                        <div class="card-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendanceTableBody">
+                                    <!-- Attendance data will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div class="stat-info">
-                        <h3 id="totalTeachers">0</h3>
-                        <p>Teachers</p>
+
+                    <!-- Recent Activity -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Recent Activity</h2>
+                            <span class="action">View All</span>
+                        </div>
+                        <div class="card-body">
+                            <ul class="activity-list" id="activityList">
+                                <!-- Activity data will be populated here -->
+                            </ul>
+                        </div>
                     </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon orange">
-                        <i class="fas fa-clipboard-check"></i>
+
+                <!-- Add User Form -->
+                <div class="card" style="margin-top: 1.5rem;">
+                    <div class="card-header">
+                        <h2>Add New User</h2>
                     </div>
-                    <div class="stat-info">
-                        <h3 id="attendanceRate">0%</h3>
-                        <p>Attendance Rate</p>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon red">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <div class="stat-info">
-                        <h3 id="pendingApprovals">0</h3>
-                        <p>Pending Approvals</p>
+                    <div class="card-body">
+                        <form id="addUserForm">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                                <div class="form-group">
+                                    <label for="userName">Full Name</label>
+                                    <input type="text" id="userName" class="form-control" placeholder="Enter full name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="userEmail">Email Address</label>
+                                    <input type="email" id="userEmail" class="form-control" placeholder="Enter email address" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="userRole">Role</label>
+                                    <select id="userRole" class="form-control" required>
+                                        <option value="">Select Role</option>
+                                        <option value="admin">Administrator</option>
+                                        <option value="teacher">Teacher</option>
+                                        <option value="student">Student</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="userPassword">Password</label>
+                                    <input type="password" id="userPassword" class="form-control" placeholder="Enter password" required minlength="6">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="submitButton">
+                                <i class="fas fa-plus"></i> Add User
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
 
-            <!-- Content Grid -->
-            <div class="content-grid">
-                <!-- Recent Attendance -->
+            <!-- Users Management Section -->
+            <div id="usersSection" class="section-content" style="display: none;">
                 <div class="card">
                     <div class="card-header">
-                        <h2>Recent Attendance</h2>
-                        <span class="action" onclick="exportAttendancePDF()">Export PDF</span>
+                        <h2>Manage Users</h2>
+                        <span class="action" onclick="loadUsers()">Refresh</span>
                     </div>
                     <div class="card-body">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Date</th>
-                                    <th>Time</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="attendanceTableBody">
-                                <!-- Attendance data will be populated here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Recent Activity -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Recent Activity</h2>
-                        <span class="action">View All</span>
-                    </div>
-                    <div class="card-body">
-                        <ul class="activity-list" id="activityList">
-                            <!-- Activity data will be populated here -->
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Add User Form -->
-            <div class="card" style="margin-top: 1.5rem;">
-                <div class="card-header">
-                    <h2>Add New User</h2>
-                </div>
-                <div class="card-body">
-                    <form id="addUserForm">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                            <div class="form-group">
-                                <label for="userName">Full Name</label>
-                                <input type="text" id="userName" class="form-control" placeholder="Enter full name" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="userEmail">Email Address</label>
-                                <input type="email" id="userEmail" class="form-control" placeholder="Enter email address" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="userRole">Role</label>
-                                <select id="userRole" class="form-control" required>
-                                    <option value="">Select Role</option>
+                        <div class="filter-controls">
+                            <div class="filter-control">
+                                <label for="userRoleFilter">Filter by Role</label>
+                                <select id="userRoleFilter" class="form-control" onchange="filterUsers()">
+                                    <option value="all">All Roles</option>
                                     <option value="admin">Administrator</option>
                                     <option value="teacher">Teacher</option>
                                     <option value="student">Student</option>
                                 </select>
                             </div>
-                            <div class="form-group">
-                                <label for="userPassword">Password</label>
-                                <input type="password" id="userPassword" class="form-control" placeholder="Enter password" required minlength="6">
+                            <div class="filter-control">
+                                <label for="userSearch">Search Users</label>
+                                <input type="text" id="userSearch" class="form-control" placeholder="Search by name or email..." onkeyup="filterUsers()">
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-primary" id="submitButton">
-                            <i class="fas fa-plus"></i> Add User
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Created</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <!-- Users data will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Management Section -->
+            <div id="attendanceSection" class="section-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Attendance Management</h2>
+                        <span class="action" onclick="loadAllAttendance()">Refresh</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="filter-controls">
+                            <div class="filter-control">
+                                <label for="attendanceDateFilter">Filter by Date</label>
+                                <input type="date" id="attendanceDateFilter" class="form-control" onchange="filterAttendance()">
+                            </div>
+                            <div class="filter-control">
+                                <label for="attendanceStatusFilter">Filter by Status</label>
+                                <select id="attendanceStatusFilter" class="form-control" onchange="filterAttendance()">
+                                    <option value="all">All Status</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                            </div>
+                            <div class="filter-control">
+                                <label for="attendanceStudentFilter">Filter by Student</label>
+                                <input type="text" id="attendanceStudentFilter" class="form-control" placeholder="Search student..." onkeyup="filterAttendance()">
+                            </div>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Student ID</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                    <th>Approved By</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allAttendanceTableBody">
+                                <!-- All attendance data will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Section -->
+            <div id="reportsSection" class="section-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Generate Reports</h2>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Attendance Report</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-group">
+                                        <label for="reportStartDate">Start Date</label>
+                                        <input type="date" id="reportStartDate" class="form-control">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reportEndDate">End Date</label>
+                                        <input type="date" id="reportEndDate" class="form-control">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reportType">Report Type</label>
+                                        <select id="reportType" class="form-control">
+                                            <option value="all">All Records</option>
+                                            <option value="approved">Approved Only</option>
+                                            <option value="pending">Pending Only</option>
+                                            <option value="rejected">Rejected Only</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="generateAttendanceReport()">
+                                        <i class="fas fa-download"></i> Generate Report
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>User Statistics</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p>Generate user statistics report</p>
+                                    <button class="btn btn-secondary" onclick="generateUserReport()">
+                                        <i class="fas fa-users"></i> User Statistics
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>System Summary</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p>Generate a comprehensive system summary report</p>
+                                    <button class="btn btn-secondary" onclick="generateSystemReport()">
+                                        <i class="fas fa-file-alt"></i> System Summary
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Section -->
+            <div id="settingsSection" class="section-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>System Settings</h2>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                            <div class="form-group">
+                                <label for="schoolName">School Name</label>
+                                <input type="text" id="schoolName" class="form-control" placeholder="Enter school name">
+                            </div>
+                            <div class="form-group">
+                                <label for="attendanceHours">Attendance Hours</label>
+                                <input type="text" id="attendanceHours" class="form-control" placeholder="e.g., 7:00 AM - 5:00 PM">
+                            </div>
+                            <div class="form-group">
+                                <label for="adminEmail">Admin Email</label>
+                                <input type="email" id="adminEmail" class="form-control" placeholder="Admin contact email">
+                            </div>
+                            <div class="form-group">
+                                <label for="systemTimezone">Timezone</label>
+                                <select id="systemTimezone" class="form-control">
+                                    <option value="UTC">UTC</option>
+                                    <option value="EST">Eastern Time (EST)</option>
+                                    <option value="PST">Pacific Time (PST)</option>
+                                    <option value="CST">Central Time (CST)</option>
+                                    <option value="GMT">Greenwich Mean Time (GMT)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveSettings()">
+                            <i class="fas fa-save"></i> Save Settings
                         </button>
-                    </form>
+                    </div>
                 </div>
             </div>
         </main>
