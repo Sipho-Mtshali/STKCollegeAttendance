@@ -19,18 +19,22 @@ let currentUser = null;
 let allUsers = [];
 let allAttendance = [];
 
-// Check authentication state
+// Check authentication state with better debugging
 auth.onAuthStateChanged((user) => {
     if (user) {
-        // User is signed in
+        console.log('User authenticated:', user.uid, user.email);
         currentUser = user;
         document.getElementById('userNameDisplay').textContent = user.displayName || user.email;
         checkAdminRole(user.uid);
-        loadDashboardData();
-        setupRealtimeListeners();
-        setupNavigation();
+        
+        // Add a small delay before loading data to ensure Firebase is ready
+        setTimeout(() => {
+            loadDashboardData();
+            setupRealtimeListeners();
+            setupNavigation();
+        }, 500);
     } else {
-        // No user is signed in, redirect to login
+        console.log('No user authenticated, redirecting to login');
         window.location.href = 'login.html';
     }
 });
@@ -64,7 +68,10 @@ function showSection(sectionId) {
     });
     
     // Show selected section
-    document.getElementById(`${sectionId}Section`).style.display = 'block';
+    const sectionElement = document.getElementById(`${sectionId}Section`);
+    if (sectionElement) {
+        sectionElement.style.display = 'block';
+    }
     
     // Update page title and subtitle
     const pageTitle = document.getElementById('pageTitle');
@@ -104,12 +111,19 @@ function checkAdminRole(uid) {
         .then((doc) => {
             if (doc.exists) {
                 const userData = doc.data();
+                console.log('Current user data:', userData);
                 if (userData.role !== 'admin') {
                     showToast('Access denied. Admin privileges required.', 'error');
                     setTimeout(() => {
                         logout();
                     }, 2000);
                 }
+            } else {
+                console.log('User document does not exist');
+                showToast('User profile not found.', 'error');
+                setTimeout(() => {
+                    logout();
+                }, 2000);
             }
         })
         .catch((error) => {
@@ -120,25 +134,51 @@ function checkAdminRole(uid) {
 
 // Load dashboard data
 function loadDashboardData() {
-    // Load user counts
-    db.collection('users').where('role', '==', 'student').get()
+    console.log('Loading dashboard data...');
+    
+    // Load user counts with better error handling and debugging
+    const studentPromise = db.collection('users').where('role', '==', 'student').get()
         .then((querySnapshot) => {
-            document.getElementById('totalStudents').textContent = querySnapshot.size;
+            const studentCount = querySnapshot.size;
+            console.log('Student count:', studentCount);
+            document.getElementById('totalStudents').textContent = studentCount;
+            return studentCount;
+        })
+        .catch((error) => {
+            console.error('Error loading student count:', error);
+            document.getElementById('totalStudents').textContent = '0';
+            return 0;
         });
 
-    db.collection('users').where('role', '==', 'teacher').get()
+    const teacherPromise = db.collection('users').where('role', '==', 'teacher').get()
         .then((querySnapshot) => {
-            document.getElementById('totalTeachers').textContent = querySnapshot.size;
+            const teacherCount = querySnapshot.size;
+            console.log('Teacher count:', teacherCount);
+            document.getElementById('totalTeachers').textContent = teacherCount;
+            return teacherCount;
+        })
+        .catch((error) => {
+            console.error('Error loading teacher count:', error);
+            document.getElementById('totalTeachers').textContent = '0';
+            return 0;
         });
 
     // Load pending approvals count
-    db.collection('attendance').where('status', '==', 'pending').get()
+    const pendingPromise = db.collection('attendance').where('status', '==', 'pending').get()
         .then((querySnapshot) => {
-            document.getElementById('pendingApprovals').textContent = querySnapshot.size;
+            const pendingCount = querySnapshot.size;
+            console.log('Pending approvals count:', pendingCount);
+            document.getElementById('pendingApprovals').textContent = pendingCount;
+            return pendingCount;
+        })
+        .catch((error) => {
+            console.error('Error loading pending approvals:', error);
+            document.getElementById('pendingApprovals').textContent = '0';
+            return 0;
         });
 
     // Load attendance rate (calculate based on approved/total)
-    db.collection('attendance').get()
+    const attendancePromise = db.collection('attendance').get()
         .then((querySnapshot) => {
             const totalRecords = querySnapshot.size;
             let approvedRecords = 0;
@@ -150,11 +190,18 @@ function loadDashboardData() {
             });
             
             const attendanceRate = totalRecords > 0 ? Math.round((approvedRecords / totalRecords) * 100) : 0;
+            console.log('Attendance rate:', attendanceRate + '%');
             document.getElementById('attendanceRate').textContent = `${attendanceRate}%`;
+            return attendanceRate;
+        })
+        .catch((error) => {
+            console.error('Error loading attendance rate:', error);
+            document.getElementById('attendanceRate').textContent = '0%';
+            return 0;
         });
 
     // Load attendance data
-    db.collection('attendance')
+    const recentAttendancePromise = db.collection('attendance')
         .orderBy('timestamp', 'desc')
         .limit(5)
         .get()
@@ -179,7 +226,7 @@ function loadDashboardData() {
                 const row = document.createElement('tr');
                 
                 row.innerHTML = `
-                    <td>${data.studentName}</td>
+                    <td>${data.studentName || 'Unknown'}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
                     <td><span class="status-badge ${data.status}">${data.status}</span></td>
@@ -192,10 +239,13 @@ function loadDashboardData() {
                 
                 tbody.appendChild(row);
             });
+        })
+        .catch((error) => {
+            console.error('Error loading attendance data:', error);
         });
 
     // Load recent activities
-    db.collection('activities')
+    const activitiesPromise = db.collection('activities')
         .orderBy('timestamp', 'desc')
         .limit(4)
         .get()
@@ -230,12 +280,21 @@ function loadDashboardData() {
                 
                 activityList.appendChild(item);
             });
+        })
+        .catch((error) => {
+            console.error('Error loading activities:', error);
         });
+
+    // Wait for all promises to complete
+    return Promise.all([studentPromise, teacherPromise, pendingPromise, attendancePromise, 
+                       recentAttendancePromise, activitiesPromise]);
 }
 
 // Load all users
-function loadUsers() {
-    db.collection('users').get()
+// Modified loadUsers function to accept filter parameters
+function loadUsers(roleFilter = 'all', searchFilter = '') {
+    console.log('Loading users...');
+    return db.collection('users').get()
         .then((querySnapshot) => {
             allUsers = [];
             const tbody = document.getElementById('usersTableBody');
@@ -259,7 +318,31 @@ function loadUsers() {
                     ...doc.data()
                 };
                 allUsers.push(userData);
-                
+            });
+            
+            // Apply filters to the data
+            const filteredUsers = allUsers.filter(user => {
+                const roleMatch = roleFilter === 'all' || user.role === roleFilter;
+                const searchMatch = !searchFilter || 
+                                  (user.name && user.name.toLowerCase().includes(searchFilter)) || 
+                                  user.email.toLowerCase().includes(searchFilter);
+                return roleMatch && searchMatch;
+            });
+            
+            // Display filtered users
+            if (filteredUsers.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 2rem;">
+                            <i class="fas fa-search" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
+                            <p style="color: var(--gray-500);">No users match your filters</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            filteredUsers.forEach((userData) => {
                 const row = document.createElement('tr');
                 const createdDate = userData.createdAt ? new Date(userData.createdAt.toDate()).toLocaleDateString() : 'N/A';
                 
@@ -270,10 +353,10 @@ function loadUsers() {
                     <td>${createdDate}</td>
                     <td><span class="status-badge approved">Active</span></td>
                     <td>
-                        <button class="btn btn-sm" onclick="editUser('${doc.id}')" title="Edit User">
+                        <button class="btn btn-sm" onclick="editUser('${userData.id}')" title="Edit User">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteUser('${doc.id}')" title="Delete User">
+                        <button class="btn btn-danger btn-sm" onclick="deleteUser('${userData.id}')" title="Delete User">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -285,7 +368,17 @@ function loadUsers() {
         .catch((error) => {
             console.error('Error loading users:', error);
             showToast('Error loading users.', 'error');
+            throw error; // Re-throw to allow proper error handling in calling functions
         });
+}
+
+// Modified filterUsers function
+function filterUsers() {
+    const roleFilter = document.getElementById('userRoleFilter').value;
+    const searchFilter = document.getElementById('userSearch').value.toLowerCase();
+    
+    // Reload users with the current filters
+    loadUsers(roleFilter, searchFilter);
 }
 
 // Filter users
@@ -314,6 +407,7 @@ function filterUsers() {
 
 // Load all attendance
 function loadAllAttendance() {
+    console.log('Loading all attendance...');
     db.collection('attendance')
         .orderBy('timestamp', 'desc')
         .get()
@@ -344,7 +438,7 @@ function loadAllAttendance() {
                 const row = document.createElement('tr');
                 
                 row.innerHTML = `
-                    <td>${data.studentName}</td>
+                    <td>${data.studentName || 'Unknown'}</td>
                     <td>${data.studentId || 'N/A'}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
@@ -410,7 +504,7 @@ function approveAttendance(attendanceId) {
                 return db.collection('attendance').doc(attendanceId).update({
                     status: 'approved',
                     approvedBy: currentUser.displayName || currentUser.email,
-                    approvedAt: new Date()
+                    approvedAt: firebase.firestore.FieldValue.serverTimestamp()
                 }).then(() => {
                     showToast('Attendance approved successfully.', 'success');
                     loadAllAttendance();
@@ -420,7 +514,7 @@ function approveAttendance(attendanceId) {
                         type: 'attendance',
                         icon: 'fa-check-circle',
                         message: `Admin approved attendance for ${data.studentName}`,
-                        timestamp: new Date(),
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                         userId: currentUser.uid,
                         userName: currentUser.displayName || currentUser.email
                     });
@@ -443,7 +537,7 @@ function rejectAttendance(attendanceId) {
                 return db.collection('attendance').doc(attendanceId).update({
                     status: 'rejected',
                     approvedBy: currentUser.displayName || currentUser.email,
-                    approvedAt: new Date()
+                    approvedAt: firebase.firestore.FieldValue.serverTimestamp()
                 }).then(() => {
                     showToast('Attendance rejected.', 'success');
                     loadAllAttendance();
@@ -453,7 +547,7 @@ function rejectAttendance(attendanceId) {
                         type: 'attendance',
                         icon: 'fa-times-circle',
                         message: `Admin rejected attendance for ${data.studentName}`,
-                        timestamp: new Date(),
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                         userId: currentUser.uid,
                         userName: currentUser.displayName || currentUser.email
                     });
@@ -491,7 +585,7 @@ function saveSettings() {
         type: 'settings',
         icon: 'fa-cog',
         message: 'Admin updated system settings',
-        timestamp: new Date(),
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         userId: currentUser.uid,
         userName: currentUser.displayName || currentUser.email
     });
@@ -618,27 +712,27 @@ function downloadAttendanceRecord(attendanceId) {
             if (doc.exists) {
                 const data = doc.data();
                 const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
+                const pdf = new jsPDF();
                 
                 // Add title
-                doc.setFontSize(16);
-                doc.text('Attendance Record', 14, 15);
+                pdf.setFontSize(16);
+                pdf.text('Attendance Record', 14, 15);
                 
                 // Add details
-                doc.setFontSize(10);
-                doc.text(`Student: ${data.studentName}`, 14, 25);
-                doc.text(`Student ID: ${data.studentId || 'N/A'}`, 14, 32);
-                doc.text(`Date: ${new Date(data.timestamp.toDate()).toLocaleDateString()}`, 14, 39);
-                doc.text(`Time: ${new Date(data.timestamp.toDate()).toLocaleTimeString()}`, 14, 46);
-                doc.text(`Status: ${data.status}`, 14, 53);
+                pdf.setFontSize(10);
+                pdf.text(`Student: ${data.studentName}`, 14, 25);
+                pdf.text(`Student ID: ${data.studentId || 'N/A'}`, 14, 32);
+                pdf.text(`Date: ${new Date(data.timestamp.toDate()).toLocaleDateString()}`, 14, 39);
+                pdf.text(`Time: ${new Date(data.timestamp.toDate()).toLocaleTimeString()}`, 14, 46);
+                pdf.text(`Status: ${data.status}`, 14, 53);
                 
                 if (data.approvedBy) {
-                    doc.text(`Approved By: ${data.approvedBy}`, 14, 60);
-                    doc.text(`Approved At: ${new Date(data.approvedAt.toDate()).toLocaleString()}`, 14, 67);
+                    pdf.text(`Approved By: ${data.approvedBy}`, 14, 60);
+                    pdf.text(`Approved At: ${new Date(data.approvedAt.toDate()).toLocaleString()}`, 14, 67);
                 }
                 
                 // Save the PDF
-                doc.save(`Attendance_${data.studentName}_${new Date(data.timestamp.toDate()).toISOString().split('T')[0]}.pdf`);
+                pdf.save(`Attendance_${data.studentName}_${new Date(data.timestamp.toDate()).toISOString().split('T')[0]}.pdf`);
                 showToast('Attendance record downloaded.', 'success');
             }
         })
@@ -685,37 +779,52 @@ function exportAttendancePDF() {
     showToast('Attendance exported as PDF.', 'success');
 }
 
-// Add new user
+// Enhanced add user function with better error handling
+// Enhanced add user function with better error handling
 document.getElementById('addUserForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
-    const name = document.getElementById('userName').value;
-    const email = document.getElementById('userEmail').value;
+    const name = document.getElementById('userName').value.trim();
+    const email = document.getElementById('userEmail').value.trim();
     const role = document.getElementById('userRole').value;
     const password = document.getElementById('userPassword').value;
+    
+    console.log('Adding user:', { name, email, role });
     
     const submitButton = document.getElementById('submitButton');
     submitButton.disabled = true;
     submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding User...';
     
+    // Store current user before creating new user
+    const currentAdmin = auth.currentUser;
+    
     // Create user with Firebase Auth
     auth.createUserWithEmailAndPassword(email, password)
         .then((userCredential) => {
             const user = userCredential.user;
+            console.log('User created in Auth:', user.uid);
             
             // Add user data to Firestore
             return db.collection('users').doc(user.uid).set({
                 name: name,
                 email: email,
                 role: role,
-                createdAt: new Date(),
-                createdBy: currentUser.uid
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: currentUser.uid,
+                active: true
             }).then(() => {
+                console.log('User data saved to Firestore');
                 // Update user profile
                 return user.updateProfile({
                     displayName: name
                 });
             });
+        })
+        .then(() => {
+            console.log('User profile updated');
+            
+            // Sign back in as the original admin user
+            return auth.signInWithEmailAndPassword(currentAdmin.email, promptForAdminPassword());
         })
         .then(() => {
             showToast('User created successfully.', 'success');
@@ -726,17 +835,33 @@ document.getElementById('addUserForm').addEventListener('submit', function(e) {
                 type: 'user',
                 icon: 'fa-user-plus',
                 message: `Admin created new ${role} user: ${name}`,
-                timestamp: new Date(),
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                 userId: currentUser.uid,
                 userName: currentUser.displayName || currentUser.email
             });
             
-            // Reload dashboard data
-            loadDashboardData();
+            // Reload dashboard data after a short delay
+            setTimeout(() => {
+                loadDashboardData();
+                loadUsers();
+            }, 1000);
         })
         .catch((error) => {
             console.error('Error creating user:', error);
-            showToast(`Error creating user: ${error.message}`, 'error');
+            
+            // Try to sign back in as admin if we got logged out
+            if (error.code === 'permission-denied') {
+                auth.signInWithEmailAndPassword(currentAdmin.email, promptForAdminPassword())
+                    .then(() => {
+                        showToast('User created but had to re-authenticate.', 'success');
+                    })
+                    .catch((reauthError) => {
+                        console.error('Reauthentication failed:', reauthError);
+                        showToast(`Error creating user: ${error.message}`, 'error');
+                    });
+            } else {
+                showToast(`Error creating user: ${error.message}`, 'error');
+            }
         })
         .finally(() => {
             submitButton.disabled = false;
@@ -744,46 +869,48 @@ document.getElementById('addUserForm').addEventListener('submit', function(e) {
         });
 });
 
+// Helper function to prompt for admin password (in a real app, you'd use a more secure method)
+function promptForAdminPassword() {
+    // In a real application, you would have stored this more securely
+    // This is just a placeholder implementation
+    return prompt("Please enter admin password to continue:");
+}
+
 // Edit user
-function editUser(userId) {
+async function editUser(userId) {
     const user = allUsers.find(u => u.id === userId);
-    
-    if (user) {
-        const newName = prompt('Enter new name:', user.name || '');
-        if (newName === null) return;
-        
-        const newRole = prompt('Enter new role (admin/teacher/student):', user.role);
-        if (newRole === null) return;
-        
-        if (!['admin', 'teacher', 'student'].includes(newRole)) {
-            showToast('Invalid role. Must be admin, teacher, or student.', 'error');
-            return;
-        }
-        
-        db.collection('users').doc(userId).update({
-            name: newName,
-            role: newRole
-        })
-        .then(() => {
-            showToast('User updated successfully.', 'success');
-            loadUsers();
-            
-            // Add activity log
-            db.collection('activities').add({
-                type: 'user',
-                icon: 'fa-user-edit',
-                message: `Admin updated user: ${user.email}`,
-                timestamp: new Date(),
-                userId: currentUser.uid,
-                userName: currentUser.displayName || currentUser.email
-            });
-        })
-        .catch((error) => {
-            console.error('Error updating user:', error);
-            showToast('Error updating user.', 'error');
+    if (!user) return;
+
+    const newName = prompt('Enter new name:', user.name || '');
+    if (newName === null) return;
+
+    const newRole = prompt('Enter new role (admin/teacher/student):', user.role);
+    if (newRole === null) return;
+
+    if (!['admin', 'teacher', 'student'].includes(newRole)) {
+        showToast('Invalid role. Must be admin, teacher, or student.', 'error');
+        return;
+    }
+
+    try {
+        await db.collection('users').doc(userId).update({ name: newName, role: newRole });
+        await db.collection('activities').add({
+            type: 'user',
+            icon: 'fa-user-edit',
+            message: `Admin updated user: ${user.email}`,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            userId: currentUser.uid,
+            userName: currentUser.displayName || currentUser.email
         });
+        showToast('User updated successfully.', 'success');
+        loadUsers();
+    } catch (error) {
+        console.error('Error updating user:', error);
+        showToast('Error updating user.', 'error');
     }
 }
+
+
 
 // Delete user
 function deleteUser(userId) {
@@ -793,10 +920,6 @@ function deleteUser(userId) {
         // Delete from Firestore
         db.collection('users').doc(userId).delete()
             .then(() => {
-                // Delete from Firebase Auth
-                return auth.deleteUser(userId);
-            })
-            .then(() => {
                 showToast('User deleted successfully.', 'success');
                 loadUsers();
                 
@@ -805,7 +928,7 @@ function deleteUser(userId) {
                     type: 'user',
                     icon: 'fa-user-times',
                     message: `Admin deleted user: ${user.email}`,
-                    timestamp: new Date(),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                     userId: currentUser.uid,
                     userName: currentUser.displayName || currentUser.email
                 });
@@ -817,16 +940,29 @@ function deleteUser(userId) {
     }
 }
 
-// Setup realtime listeners
+// Enhanced realtime listeners
 function setupRealtimeListeners() {
-    // Listen for new users
+    console.log('Setting up realtime listeners...');
+    
+    // Listen for changes in users collection
     db.collection('users').onSnapshot((snapshot) => {
-        loadDashboardData();
+        console.log('Users collection changed, refreshing counts...');
+        // Small delay to ensure all changes are processed
+        setTimeout(() => {
+            loadDashboardData();
+        }, 200);
+    }, (error) => {
+        console.error('Error with users listener:', error);
     });
     
-    // Listen for new attendance records
+    // Listen for changes in attendance collection
     db.collection('attendance').onSnapshot((snapshot) => {
-        loadDashboardData();
+        console.log('Attendance collection changed, refreshing counts...');
+        setTimeout(() => {
+            loadDashboardData();
+        }, 200);
+    }, (error) => {
+        console.error('Error with attendance listener:', error);
     });
 }
 
@@ -857,7 +993,7 @@ function formatTimeAgo(date) {
     return date.toLocaleDateString();
 }
 
-// Show toast notification
+// Show toast notification - CENTERED VERSION
 function showToast(message, type = 'info') {
     const toastContainer = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -880,6 +1016,151 @@ function showToast(message, type = 'info') {
             toast.parentElement.removeChild(toast);
         }
     }, 5000);
+}
+
+// Modal functions
+function openModal(modalId) {
+    document.getElementById(modalId).classList.add('active');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+}
+
+// Enhanced delete user function with modal
+function deleteUser(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    
+    if (user) {
+        // Set the message
+        document.getElementById('deleteModalMessage').textContent = 
+            `Are you sure you want to delete ${user.name} (${user.email})? This action cannot be undone.`;
+        
+        // Set up the confirm button
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        confirmBtn.onclick = () => {
+            performUserDeletion(userId, user);
+            closeModal('deleteModal');
+        };
+        
+        // Open the modal
+        openModal('deleteModal');
+    }
+}
+
+function performUserDeletion(userId, user) {
+    // Disable the delete button to prevent multiple clicks
+    const deleteBtn = document.getElementById('confirmDeleteBtn');
+    const originalText = deleteBtn.innerHTML;
+    deleteBtn.disabled = true;
+    deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+    
+    // Delete from Firestore
+    db.collection('users').doc(userId).delete()
+        .then(() => {
+            showToast('User deleted successfully.', 'success');
+            
+            // Add activity log
+            return db.collection('activities').add({
+                type: 'user',
+                icon: 'fa-user-times',
+                message: `Admin deleted user: ${user.email}`,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                userId: currentUser.uid,
+                userName: currentUser.displayName || currentUser.email
+            });
+        })
+        .then(() => {
+            // Reload users but maintain the current filter
+            const currentRoleFilter = document.getElementById('userRoleFilter').value;
+            const currentSearchFilter = document.getElementById('userSearch').value;
+            
+            return loadUsers(currentRoleFilter, currentSearchFilter);
+        })
+        .catch((error) => {
+            console.error('Error deleting user:', error);
+            showToast('Error deleting user: ' + error.message, 'error');
+        })
+        .finally(() => {
+            // Re-enable the button
+            deleteBtn.disabled = false;
+            deleteBtn.innerHTML = originalText;
+        });
+}
+
+// Enhanced edit user function with modal
+function editUser(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    
+    if (user) {
+        // Populate the form
+        document.getElementById('editUserId').value = userId;
+        document.getElementById('editUserName').value = user.name || '';
+        document.getElementById('editUserEmail').value = user.email;
+        document.getElementById('editUserRole').value = user.role;
+        
+        // Open the modal
+        openModal('editModal');
+    }
+}
+
+function updateUser() {
+    const userId = document.getElementById('editUserId').value;
+    const name = document.getElementById('editUserName').value.trim();
+    const email = document.getElementById('editUserEmail').value.trim();
+    const role = document.getElementById('editUserRole').value;
+    
+    if (!name || !email || !role) {
+        showToast('Please fill all fields.', 'error');
+        return;
+    }
+    
+    if (!['admin', 'teacher', 'student'].includes(role)) {
+        showToast('Invalid role. Must be admin, teacher, or student.', 'error');
+        return;
+    }
+    
+    // Disable the update button to prevent multiple clicks
+    const updateBtn = document.querySelector('#editModal .btn-primary');
+    const originalText = updateBtn.innerHTML;
+    updateBtn.disabled = true;
+    updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+    
+    db.collection('users').doc(userId).update({
+        name: name,
+        email: email,
+        role: role
+    })
+    .then(() => {
+        showToast('User updated successfully.', 'success');
+        closeModal('editModal');
+        
+        // Add activity log
+        return db.collection('activities').add({
+            type: 'user',
+            icon: 'fa-user-edit',
+            message: `Admin updated user: ${email}`,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            userId: currentUser.uid,
+            userName: currentUser.displayName || currentUser.email
+        });
+    })
+    .then(() => {
+        // Reload users but maintain the current filter
+        const currentRoleFilter = document.getElementById('userRoleFilter').value;
+        const currentSearchFilter = document.getElementById('userSearch').value;
+        
+        return loadUsers(currentRoleFilter, currentSearchFilter);
+    })
+    .catch((error) => {
+        console.error('Error updating user:', error);
+        showToast('Error updating user: ' + error.message, 'error');
+    })
+    .finally(() => {
+        // Re-enable the button
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = originalText;
+    });
 }
 
 // Logout function

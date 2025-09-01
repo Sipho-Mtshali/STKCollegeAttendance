@@ -408,8 +408,14 @@
         .toast-container {
             position: fixed;
             top: 20px;
-            right: 20px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            pointer-events: none;
         }
 
         .toast {
@@ -420,7 +426,10 @@
             display: flex;
             align-items: center;
             box-shadow: var(--shadow);
-            animation: slideIn 0.3s ease;
+            animation: slideInFromTop 0.3s ease;
+            min-width: 300px;
+            justify-content: space-between;
+            pointer-events: auto;
         }
 
         .toast.success {
@@ -429,6 +438,87 @@
 
         .toast.error {
             background: var(--danger);
+        }
+        .toast.info {
+            background: var(--primary);
+        }
+        .toast-content {
+            display: flex;
+            align-items: center;
+        }
+
+        .toast-content i {
+            margin-right: 0.5rem;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            margin-left: 1rem;
+            font-size: 1rem;
+        }
+
+        @keyframes slideInFromTop {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        /* Activity List Styles */
+        .activity-list {
+            list-style: none;
+        }
+
+        .activity-item {
+            display: flex;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .activity-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.blue {
+            background: rgba(79, 70, 229, 0.1);
+            color: var(--primary);
+        }
+
+        .activity-icon.green {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--secondary);
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-content p {
+            margin-bottom: 0.25rem;
+        }
+
+        .activity-time {
+            font-size: 0.75rem;
+            color: var(--gray-500);
         }
 
         .toast i {

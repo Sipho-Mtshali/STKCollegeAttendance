@@ -11,7 +11,7 @@
     <!-- jsPDF for PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-    <script href="teacher.js"></script>
+    <script src="teacher.js" defer></script>
     <link rel="stylesheet" href="teacher.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -36,25 +36,25 @@
 
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#" class="nav-link active" onclick="showSection('dashboard')">
+                    <a href="#" class="nav-link active" data-section="dashboard">
                         <i class="fas fa-home"></i>
                         <span>Dashboard</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('pending')">
+                    <a href="#" class="nav-link" data-section="pending">
                         <i class="fas fa-clock"></i>
                         <span>Pending Approval</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('history')">
+                    <a href="#" class="nav-link" data-section="history">
                         <i class="fas fa-history"></i>
                         <span>Attendance History</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('reports')">
+                    <a href="#" class="nav-link" data-section="reports">
                         <i class="fas fa-chart-bar"></i>
                         <span>Reports</span>
                     </a>

@@ -401,5 +401,62 @@
             </div>
         </main>
     </div>
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Confirm Deletion</h3>
+            <button class="modal-close" onclick="closeModal('deleteModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="confirmation-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="confirmation-message">
+                <h4>Are you sure?</h4>
+                <p id="deleteModalMessage">This action cannot be undone.</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal('deleteModal')">Cancel</button>
+            <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Edit User</h3>
+            <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label for="editUserName">Full Name</label>
+                    <input type="text" id="editUserName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editUserEmail">Email Address</label>
+                    <input type="email" id="editUserEmail" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="editUserRole">Role</label>
+                    <select id="editUserRole" class="form-control" required>
+                        <option value="admin">Administrator</option>
+                        <option value="teacher">Teacher</option>
+                        <option value="student">Student</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal('editModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="updateUser()">Update User</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
