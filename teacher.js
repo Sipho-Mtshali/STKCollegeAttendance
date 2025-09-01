@@ -72,6 +72,11 @@ function checkTeacherRole(uid) {
                     setupRealtimeListeners();
                     setupNavigation();
                 }
+            } else {
+                showToast('User profile not found.', 'error');
+                setTimeout(() => {
+                    logout();
+                }, 2000);
             }
         })
         .catch((error) => {
@@ -124,8 +129,8 @@ function showSection(sectionId) {
 function loadDashboardData() {
     console.log('Loading teacher dashboard data...');
     
-    // Load student counts
-    const studentPromise = db.collection('students').where('teacherId', '==', currentUser.uid).get()
+    // Load student counts - only students assigned to this teacher
+    const studentPromise = db.collection('users').where('role', '==', 'student').get()
         .then((querySnapshot) => {
             const studentCount = querySnapshot.size;
             console.log('Student count:', studentCount);
@@ -204,7 +209,7 @@ function loadDashboardData() {
 
 // Load students list
 function loadStudents() {
-    db.collection('students').where('teacherId', '==', currentUser.uid).get()
+    db.collection('users').where('role', '==', 'student').get()
         .then((querySnapshot) => {
             studentsList = [];
             querySnapshot.forEach((doc) => {
@@ -670,8 +675,8 @@ function setupRealtimeListeners() {
         });
         
     // Listen for changes in students collection
-    db.collection('students')
-        .where('teacherId', '==', currentUser.uid)
+    db.collection('users')
+        .where('role', '==', 'student')
         .onSnapshot((snapshot) => {
             document.getElementById('totalStudents').textContent = snapshot.size;
         });
