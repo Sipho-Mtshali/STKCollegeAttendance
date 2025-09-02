@@ -1,11 +1,25 @@
-// Use the Firebase instance already initialized in firebase-config.js
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyDV1Wcl9a19chq6JsVR-TCDQhT0tS1BzFo",
+    authDomain: "stkcollegeattendance.firebaseapp.com",
+    projectId: "stkcollegeattendance",
+    storageBucket: "stkcollegeattendance.firebasestorage.app",
+    messagingSenderId: "574527402732",
+    appId: "1:574527402732:web:ecedfb8d3e9aa693776bc9",
+    measurementId: "G-8SDMWZ8H9Z"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
 // Global variables
 let currentUser = null;
 let studentData = null;
 let todayAttendance = null;
 let allAttendanceRecords = [];
 let markBtn = null;
-
 
 // Check authentication state
 auth.onAuthStateChanged((user) => {
@@ -20,7 +34,7 @@ auth.onAuthStateChanged((user) => {
     }
 });
 
-// Check if user has student role
+// Check if user has student role - ENHANCED VERSION
 function checkStudentRole(uid) {
     db.collection('users').doc(uid).get()
         .then((doc) => {
@@ -70,27 +84,33 @@ function createStudentUserDocument(uid) {
 function loadStudentData(uid) {
     console.log("Loading student data for UID:", uid);
     
-    db.collection('students').doc(uid).get()
-        .then((doc) => {
-            if (doc.exists) {
+    // First try to find student by userId in students collection
+    db.collection('students')
+        .where('userId', '==', uid)
+        .get()
+        .then((querySnapshot) => {
+            if (!querySnapshot.empty) {
+                // Student found by userId field
+                const doc = querySnapshot.docs[0];
                 studentData = doc.data();
                 studentData.id = doc.id;
-
-                console.log("Student data loaded by document ID:", studentData);
-
+                
+                console.log("Student data loaded by userId:", studentData);
+                
                 document.getElementById('userNameDisplay').textContent = studentData.name;
-
+                
                 // Load dashboard and listeners AFTER studentData is ready
                 showSection('dashboard');
                 loadDashboardData();
                 setupRealtimeListeners();
                 setupMobileMenu();
             } else {
+                // If not found, try to create student document
                 createStudentDocument(uid);
             }
         })
         .catch((error) => {
-            console.error('Error loading student data:', error);
+            console.error('Error loading student data by userId:', error);
             createStudentDocument(uid);
         });
 }
@@ -102,28 +122,47 @@ function createStudentDocument(uid) {
         name: currentUser.displayName || currentUser.email.split('@')[0],
         email: currentUser.email,
         studentId: 'STU-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        teacherId: '' // You might want to assign students to teachers
     };
     
-    db.collection('students').doc(uid).set(studentDoc)
-        .then(() => {
-            studentData = studentDoc;
-            studentData.id = uid;
-
-            showToast('Student profile created successfully.', 'success');
-            console.log("Student document created:", studentData);
-
-            document.getElementById('userNameDisplay').textContent = studentData.name;
-
-            showSection('dashboard');
-            loadDashboardData();
-            setupRealtimeListeners();
-            setupMobileMenu();
-        })
-        .catch((error) => {
-            console.error('Error creating student document:', error);
-            showToast('Error creating student profile: ' + error.message, 'error');
-        });
+    // First create the user document in the users collection
+    db.collection('users').doc(uid).set({
+        email: currentUser.email,
+        role: 'student',
+        name: studentDoc.name,
+        studentId: studentDoc.studentId,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    })
+    .then(() => {
+        // Then create the student document in the students collection
+        return db.collection('students').add(studentDoc);
+    })
+    .then((docRef) => {
+        studentData = studentDoc;
+        studentData.id = docRef.id;
+        
+        showToast('Student profile created successfully.', 'success');
+        console.log("Student document created:", studentData);
+        
+        document.getElementById('userNameDisplay').textContent = studentData.name;
+        
+        showSection('dashboard');
+        loadDashboardData();
+        setupRealtimeListeners();
+        setupMobileMenu();
+    })
+    .catch((error) => {
+        console.error('Error creating student document:', error);
+        showToast('Error creating student profile: ' + error.message, 'error');
+        
+        // Enable the mark button even if student data fails to load
+        const markBtn = document.getElementById('markAttendanceBtn');
+        if (markBtn) {
+            markBtn.disabled = false;
+            markBtn.innerHTML = '<i class="fas fa-check-circle"></i> Mark Me Present Today';
+        }
+    });
 }
 
 // Setup mobile menu toggle
@@ -213,14 +252,14 @@ function updateNavActive(section) {
 
 // Load dashboard data
 function loadDashboardData() {
-    if (!studentData || !studentData.id) {
-        console.error("Student data not available for loading dashboard");
-        showToast('Student data not loaded. Please refresh the page.', 'error');
+    if (!currentUser || !currentUser.uid) {
+        console.error("Current user not available for loading dashboard");
+        showToast('User not authenticated. Please log in again.', 'error');
         return;
     }
 
     db.collection('attendance')
-        .where('studentId', '==', studentData.id)
+        .where('studentUid', '==', currentUser.uid)
         .get()
         .then((querySnapshot) => {
             allAttendanceRecords = [];
@@ -251,6 +290,25 @@ function loadDashboardData() {
             if (presentDaysEl) presentDaysEl.textContent = presentDays;
             if (pendingDaysEl) pendingDaysEl.textContent = pendingDays;
             if (absentDaysEl) absentDaysEl.textContent = absentDays;
+
+            // Update statistics section as well
+            const statsTotalDaysEl = document.getElementById('statsTotalDays');
+            const statsPresentDaysEl = document.getElementById('statsPresentDays');
+            const statsPendingDaysEl = document.getElementById('statsPendingDays');
+            const statsAbsentDaysEl = document.getElementById('statsAbsentDays');
+
+            if (statsTotalDaysEl) statsTotalDaysEl.textContent = totalDays;
+            if (statsPresentDaysEl) statsPresentDaysEl.textContent = presentDays;
+            if (statsPendingDaysEl) statsPendingDaysEl.textContent = pendingDays;
+            if (statsAbsentDaysEl) statsAbsentDaysEl.textContent = absentDays;
+
+            // Update attendance rate
+            const attendanceRate = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+            const attendanceRateBar = document.getElementById('attendanceRateBar');
+            const attendanceRateText = document.getElementById('attendanceRateText');
+            
+            if (attendanceRateBar) attendanceRateBar.style.width = `${attendanceRate}%`;
+            if (attendanceRateText) attendanceRateText.textContent = `${attendanceRate}% attendance rate`;
 
             updateTodayStatus();
             loadRecentAttendance();
@@ -317,9 +375,8 @@ function updateTodayStatus() {
 
 // Mark attendance
 function markAttendance() {
-    if (!studentData || !studentData.id) {
-        showToast('Student data not loaded. Please wait and try again.', 'error');
-        if (currentUser) loadStudentData(currentUser.uid);
+    if (!currentUser || !currentUser.uid) {
+        showToast('User not authenticated. Please log in again.', 'error');
         return;
     }
 
@@ -344,19 +401,21 @@ function markAttendance() {
     markBtn.innerHTML = '<span class="spinner"></span> Marking...';
 
     const today = new Date().toISOString().split('T')[0];
+    const studentName = studentData ? studentData.name : (currentUser.displayName || currentUser.email.split('@')[0]);
+    const studentId = studentData ? studentData.studentId : 'N/A';
 
     db.collection('attendance').add({
-        studentId: studentData.id,
-        studentName: studentData.name,
+        studentUid: currentUser.uid,
+        studentName: studentName,
+        studentId: studentId,
         date: today,
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        status: 'pending',
-        studentIdNumber: studentData.studentId || 'N/A'
+        status: 'pending'
     })
     .then((docRef) => {
         showToast('Attendance marked successfully! Waiting for teacher approval.', 'success');
         return db.collection('activities').add({
-            message: `${studentData.name} marked attendance for ${today}`,
+            message: `${studentName} marked attendance for ${today}`,
             icon: 'fa-user-check',
             type: 'attendance',
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -371,12 +430,150 @@ function markAttendance() {
     });
 }
 
+// Load recent attendance
+function loadRecentAttendance() {
+    const tableBody = document.getElementById('recentAttendanceTableBody');
+    if (!tableBody) return;
+
+    // Clear existing rows
+    tableBody.innerHTML = '';
+
+    // Sort by date descending and get latest 5 records
+    const recentRecords = [...allAttendanceRecords]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 5);
+
+    if (recentRecords.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="4" class="empty-state">No attendance records found</td></tr>';
+        return;
+    }
+
+    recentRecords.forEach(record => {
+        const row = document.createElement('tr');
+        
+        const date = new Date(record.date);
+        const formattedDate = date.toLocaleDateString();
+        const formattedTime = record.timestamp ? record.timestamp.toDate().toLocaleTimeString() : 'N/A';
+        
+        row.innerHTML = `
+            <td>${formattedDate}</td>
+            <td>${formattedTime}</td>
+            <td><span class="status-badge ${record.status}">${record.status}</span></td>
+            <td>${record.approvedBy || 'N/A'}</td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+}
+
+// Load attendance history
+function loadAttendanceHistory() {
+    const tableBody = document.getElementById('attendanceTableBody');
+    if (!tableBody) return;
+
+    // Clear existing rows
+    tableBody.innerHTML = '';
+
+    // Get status filter value
+    const statusFilter = document.getElementById('statusFilter').value;
+
+    // Filter records if needed
+    let filteredRecords = allAttendanceRecords;
+    if (statusFilter !== 'all') {
+        filteredRecords = allAttendanceRecords.filter(record => record.status === statusFilter);
+    }
+
+    // Sort by date descending
+    filteredRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (filteredRecords.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No attendance records found</td></tr>';
+        return;
+    }
+
+    filteredRecords.forEach(record => {
+        const row = document.createElement('tr');
+        
+        const date = new Date(record.date);
+        const formattedDate = date.toLocaleDateString();
+        const formattedTime = record.timestamp ? record.timestamp.toDate().toLocaleTimeString() : 'N/A';
+        
+        row.innerHTML = `
+            <td>${formattedDate}</td>
+            <td>${formattedTime}</td>
+            <td><span class="status-badge ${record.status}">${record.status}</span></td>
+            <td>${record.approvedBy || 'N/A'}</td>
+            <td>${record.remarks || 'N/A'}</td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+}
+
+// Filter attendance history
+function filterAttendance() {
+    loadAttendanceHistory();
+}
+
+// Update statistics
+function updateStatistics() {
+    // This is already handled in loadDashboardData()
+    // We just need to make sure the stats section is updated
+    loadDashboardData();
+}
+
+// Load recent activity
+function loadRecentActivity() {
+    const activityList = document.getElementById('activityList');
+    if (!activityList) return;
+
+    // Clear existing items
+    activityList.innerHTML = '';
+
+    // Get recent activities (last 5)
+    db.collection('activities')
+        .orderBy('timestamp', 'desc')
+        .limit(5)
+        .get()
+        .then((querySnapshot) => {
+            if (querySnapshot.empty) {
+                activityList.innerHTML = '<li class="empty-state">No recent activity</li>';
+                return;
+            }
+
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                const item = document.createElement('li');
+                item.className = 'activity-item';
+                
+                const time = data.timestamp ? data.timestamp.toDate().toLocaleTimeString() : 'N/A';
+                
+                item.innerHTML = `
+                    <div class="activity-icon blue">
+                        <i class="fas ${data.icon || 'fa-bell'}"></i>
+                    </div>
+                    <div class="activity-content">
+                        <p>${data.message}</p>
+                        <span class="activity-time">${time}</span>
+                    </div>
+                `;
+                
+                activityList.appendChild(item);
+            });
+        })
+        .catch((error) => {
+            console.error('Error loading activities:', error);
+            activityList.innerHTML = '<li class="empty-state">Error loading activities</li>';
+        });
+}
+
 // Set up realtime listeners
 function setupRealtimeListeners() {
-    if (!studentData || !studentData.id) return;
+    if (!currentUser || !currentUser.uid) return;
 
+    // Listen for attendance changes
     db.collection('attendance')
-        .where('studentId', '==', studentData.id)
+        .where('studentUid', '==', currentUser.uid)
         .onSnapshot((snapshot) => {
             snapshot.docChanges().forEach((change) => {
                 if (change.type === 'added' || change.type === 'modified') {
@@ -396,6 +593,16 @@ function setupRealtimeListeners() {
         }, (error) => {
             console.error('Error in realtime listener:', error);
         });
+
+    // Listen for activity changes
+    db.collection('activities')
+        .orderBy('timestamp', 'desc')
+        .limit(5)
+        .onSnapshot((snapshot) => {
+            loadRecentActivity();
+        }, (error) => {
+            console.error('Error in activity listener:', error);
+        });
 }
 
 // Show toast notification
@@ -406,7 +613,7 @@ function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `
-        <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+        <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
         ${message}
     `;
     toastContainer.appendChild(toast);
@@ -417,24 +624,28 @@ function showToast(message, type = 'success') {
 // Logout
 function logout() {
     auth.signOut()
-        .then(() => { window.location.href = 'login.html'; })
+        .then(() => {
+            console.log('User signed out successfully');
+            window.location.href = 'login.html';
+        })
         .catch((error) => {
             console.error('Error signing out:', error);
-            showToast('Error signing out.', 'error');
+            showToast('Error signing out. Please try again.', 'error');
         });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+// Initialize the mark attendance button
+function initMarkAttendanceButton() {
     markBtn = document.getElementById('markAttendanceBtn');
-    
     if (markBtn) {
-        markBtn.disabled = true; // disable until student data loads
+        // Enable button by default - it will be disabled if needed
+        markBtn.disabled = false;
     }
-    
-    // Setup mobile menu
+}
+
+// Call this function when the DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    initMarkAttendanceButton();
     setupMobileMenu();
-    
-    // Show dashboard by default
     showSection('dashboard');
 });
-
