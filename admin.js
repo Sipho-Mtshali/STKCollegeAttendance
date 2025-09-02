@@ -24,7 +24,22 @@ auth.onAuthStateChanged((user) => {
     if (user) {
         console.log('User authenticated:', user.uid, user.email);
         currentUser = user;
-        document.getElementById('userNameDisplay').textContent = user.displayName || user.email;
+        
+        // Get user data to display name instead of email
+        db.collection('users').doc(user.uid).get()
+            .then((doc) => {
+                if (doc.exists) {
+                    const userData = doc.data();
+                    document.getElementById('userNameDisplay').textContent = userData.name || user.email;
+                } else {
+                    document.getElementById('userNameDisplay').textContent = user.email;
+                }
+            })
+            .catch((error) => {
+                console.error('Error fetching user data:', error);
+                document.getElementById('userNameDisplay').textContent = user.email;
+            });
+            
         checkAdminRole(user.uid);
         
         // Add a small delay before loading data to ensure Firebase is ready
@@ -38,6 +53,81 @@ auth.onAuthStateChanged((user) => {
         window.location.href = 'login.html';
     }
 });
+
+// Function to open edit attendance modal
+function editAttendance(attendanceId) {
+    const attendance = allAttendance.find(a => a.id === attendanceId);
+    
+    if (attendance) {
+        // Populate the form
+        document.getElementById('editAttendanceId').value = attendanceId;
+        document.getElementById('editStudentName').value = attendance.studentName || 'Unknown';
+        document.getElementById('editAttendanceDate').value = new Date(attendance.timestamp.toDate()).toLocaleDateString();
+        document.getElementById('editAttendanceTime').value = new Date(attendance.timestamp.toDate()).toLocaleTimeString();
+        document.getElementById('editAttendanceStatus').value = attendance.status;
+        document.getElementById('editAttendanceNotes').value = '';
+        
+        // Open the modal
+        openModal('editAttendanceModal');
+    }
+}
+
+// Function to update attendance status
+function updateAttendanceStatus() {
+    const attendanceId = document.getElementById('editAttendanceId').value;
+    const newStatus = document.getElementById('editAttendanceStatus').value;
+    const notes = document.getElementById('editAttendanceNotes').value;
+    
+    // Get current user name for the approvedBy field
+    const currentUserName = document.getElementById('userNameDisplay').textContent;
+    
+    // Disable the update button to prevent multiple clicks
+    const updateBtn = document.querySelector('#editAttendanceModal .btn-primary');
+    const originalText = updateBtn.innerHTML;
+    updateBtn.disabled = true;
+    updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+    
+    // Update the attendance record
+    db.collection('attendance').doc(attendanceId).update({
+        status: newStatus,
+        approvedBy: currentUserName,
+        approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        notes: notes || null
+    })
+    .then(() => {
+        showToast(`Attendance status updated to ${newStatus}.`, 'success');
+        closeModal('editAttendanceModal');
+        
+        // Add activity log
+        const attendance = allAttendance.find(a => a.id === attendanceId);
+        return db.collection('activities').add({
+            type: 'attendance',
+            icon: newStatus === 'approved' ? 'fa-check-circle' : newStatus === 'rejected' ? 'fa-times-circle' : 'fa-clock',
+            message: `Admin updated attendance status for ${attendance.studentName} to ${newStatus}`,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            userId: currentUser.uid,
+            userName: currentUserName
+        });
+    })
+    .then(() => {
+        // Reload attendance data
+        loadAllAttendance();
+        
+        // If we're on the dashboard, reload that too
+        if (document.getElementById('dashboardSection').style.display !== 'none') {
+            loadDashboardData();
+        }
+    })
+    .catch((error) => {
+        console.error('Error updating attendance:', error);
+        showToast('Error updating attendance: ' + error.message, 'error');
+    })
+    .finally(() => {
+        // Re-enable the button
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = originalText;
+    });
+}
 
 // Setup navigation
 function setupNavigation() {
@@ -405,7 +495,7 @@ function filterUsers() {
     });
 }
 
-// Load all attendance
+// Update the loadAllAttendance function to include edit button and show approver name
 function loadAllAttendance() {
     console.log('Loading all attendance...');
     db.collection('attendance')
@@ -445,17 +535,16 @@ function loadAllAttendance() {
                     <td><span class="status-badge ${data.status}">${data.status}</span></td>
                     <td>${data.approvedBy || '-'}</td>
                     <td>
-                        ${data.status === 'pending' ? `
-                            <button class="btn btn-primary btn-sm" onclick="approveAttendance('${doc.id}')" title="Approve">
-                                <i class="fas fa-check"></i>
+                        <div class="attendance-actions">
+                            <button class="btn-status edit" onclick="editAttendance('${doc.id}')" title="Edit Status">
+                                <i class="fas fa-edit"></i>
+                                <span>Edit</span>
                             </button>
-                            <button class="btn btn-danger btn-sm" onclick="rejectAttendance('${doc.id}')" title="Reject">
-                                <i class="fas fa-times"></i>
+                            <button class="btn-status" onclick="downloadAttendanceRecord('${doc.id}')" title="Download">
+                                <i class="fas fa-download"></i>
+                                <span>Download</span>
                             </button>
-                        ` : ''}
-                        <button class="btn btn-sm" onclick="downloadAttendanceRecord('${doc.id}')" title="Download">
-                            <i class="fas fa-download"></i>
-                        </button>
+                        </div>
                     </td>
                 `;
                 
@@ -494,8 +583,11 @@ function filterAttendance() {
     });
 }
 
-// Approve attendance
+// Update the approveAttendance and rejectAttendance functions to use names
 function approveAttendance(attendanceId) {
+    // Get current user name for the approvedBy field
+    const currentUserName = document.getElementById('userNameDisplay').textContent;
+    
     db.collection('attendance').doc(attendanceId).get()
         .then((doc) => {
             if (doc.exists) {
@@ -503,7 +595,7 @@ function approveAttendance(attendanceId) {
                 
                 return db.collection('attendance').doc(attendanceId).update({
                     status: 'approved',
-                    approvedBy: currentUser.displayName || currentUser.email,
+                    approvedBy: currentUserName,
                     approvedAt: firebase.firestore.FieldValue.serverTimestamp()
                 }).then(() => {
                     showToast('Attendance approved successfully.', 'success');
@@ -516,7 +608,7 @@ function approveAttendance(attendanceId) {
                         message: `Admin approved attendance for ${data.studentName}`,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                         userId: currentUser.uid,
-                        userName: currentUser.displayName || currentUser.email
+                        userName: currentUserName
                     });
                 });
             }
@@ -527,8 +619,10 @@ function approveAttendance(attendanceId) {
         });
 }
 
-// Reject attendance
 function rejectAttendance(attendanceId) {
+    // Get current user name for the approvedBy field
+    const currentUserName = document.getElementById('userNameDisplay').textContent;
+    
     db.collection('attendance').doc(attendanceId).get()
         .then((doc) => {
             if (doc.exists) {
@@ -536,7 +630,7 @@ function rejectAttendance(attendanceId) {
                 
                 return db.collection('attendance').doc(attendanceId).update({
                     status: 'rejected',
-                    approvedBy: currentUser.displayName || currentUser.email,
+                    approvedBy: currentUserName,
                     approvedAt: firebase.firestore.FieldValue.serverTimestamp()
                 }).then(() => {
                     showToast('Attendance rejected.', 'success');
@@ -549,7 +643,7 @@ function rejectAttendance(attendanceId) {
                         message: `Admin rejected attendance for ${data.studentName}`,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                         userId: currentUser.uid,
-                        userName: currentUser.displayName || currentUser.email
+                        userName: currentUserName
                     });
                 });
             }

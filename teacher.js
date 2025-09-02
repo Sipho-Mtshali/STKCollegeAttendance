@@ -265,7 +265,7 @@ function loadPendingAttendance() {
                 
                 row.innerHTML = `
                     <td>${data.studentName || 'Unknown'}</td>
-                    <td>${data.studentId || 'N/A'}</td>
+                    <td>${data.studentEmail || data.studentId || 'N/A'}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
                     <td><span class="status-badge ${data.status}">${data.status}</span></td>
@@ -330,7 +330,7 @@ function loadAttendanceHistory() {
     const tbody = document.getElementById('historyTableBody');
     tbody.innerHTML = `
         <tr>
-            <td colspan="6" style="text-align: center; padding: 2rem;">
+            <td colspan="7" style="text-align: center; padding: 2rem;">
                 <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary); margin-bottom: 1rem; display: block;"></i>
                 <p style="color: var(--gray-500);">Loading attendance history...</p>
             </td>
@@ -346,7 +346,7 @@ function loadAttendanceHistory() {
             if (querySnapshot.empty) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 2rem;">
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
                             <i class="fas fa-inbox" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
                             <p style="color: var(--gray-500);">No attendance records found</p>
                         </td>
@@ -359,13 +359,55 @@ function loadAttendanceHistory() {
                 const data = doc.data();
                 const row = document.createElement('tr');
                 
+                // Status badge with icon
+                let statusBadge = '';
+                if (data.status === 'approved') {
+                    statusBadge = `<span class="status-badge approved"><i class="fas fa-check-circle"></i> Approved</span>`;
+                } else if (data.status === 'rejected') {
+                    statusBadge = `<span class="status-badge rejected"><i class="fas fa-times-circle"></i> Rejected</span>`;
+                } else {
+                    statusBadge = `<span class="status-badge pending"><i class="fas fa-clock"></i> Pending</span>`;
+                }
+                
+                // Determine which buttons to show based on status
+                let actionButtons = '';
+                if (data.status === 'approved') {
+                    actionButtons = `
+                        <div class="btn-action-group">
+                            <button class="btn-status btn-absent" onclick="updateAttendanceStatus('${doc.id}', 'rejected')">
+                                <i class="fas fa-user-times"></i> Mark Absent
+                            </button>
+                        </div>
+                    `;
+                } else if (data.status === 'rejected') {
+                    actionButtons = `
+                        <div class="btn-action-group">
+                            <button class="btn-status btn-present" onclick="updateAttendanceStatus('${doc.id}', 'approved')">
+                                <i class="fas fa-user-check"></i> Mark Present
+                            </button>
+                        </div>
+                    `;
+                } else { // pending
+                    actionButtons = `
+                        <div class="btn-action-group">
+                            <button class="btn-status btn-present" onclick="updateAttendanceStatus('${doc.id}', 'approved')">
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                            <button class="btn-status btn-absent" onclick="updateAttendanceStatus('${doc.id}', 'rejected')">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
+                        </div>
+                    `;
+                }
+                
                 row.innerHTML = `
                     <td>${data.studentName || 'Unknown'}</td>
-                    <td>${data.studentId || 'N/A'}</td>
+                    <td>${data.studentEmail || data.studentId || 'N/A'}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
-                    <td><span class="status-badge ${data.status}">${data.status}</span></td>
+                    <td>${statusBadge}</td>
                     <td>${data.approvedBy || '-'}</td>
+                    <td class="table-actions">${actionButtons}</td>
                 `;
                 
                 tbody.appendChild(row);
@@ -375,7 +417,7 @@ function loadAttendanceHistory() {
             console.error('Error loading attendance history:', error);
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" style="text-align: center; padding: 2rem; color: var(--danger);">
+                    <td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">
                         <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
                         <p>Error loading attendance history. Please try again.</p>
                         <button class="btn btn-primary" onclick="loadAttendanceHistory()" style="margin-top: 1rem;">
@@ -387,7 +429,40 @@ function loadAttendanceHistory() {
             showToast('Error loading attendance history.', 'error');
         });
 }
-
+// Update attendance status (for history section)
+function updateAttendanceStatus(attendanceId, newStatus) {
+    db.collection('attendance').doc(attendanceId).get()
+        .then((doc) => {
+            if (doc.exists) {
+                const data = doc.data();
+                
+                return db.collection('attendance').doc(attendanceId).update({
+                    status: newStatus,
+                    approvedBy: currentUser.displayName || currentUser.email,
+                    approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => {
+                    const statusText = newStatus === 'approved' ? 'approved' : 'rejected';
+                    showToast(`Attendance ${statusText} successfully.`, 'success');
+                    loadAttendanceHistory();
+                    loadDashboardData(); // Refresh dashboard stats
+                    
+                    // Add activity log
+                    db.collection('activities').add({
+                        type: 'attendance',
+                        icon: newStatus === 'approved' ? 'fa-check-circle' : 'fa-times-circle',
+                        message: `${newStatus === 'approved' ? 'Approved' : 'Rejected'} attendance for ${data.studentName}`,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        userId: currentUser.uid,
+                        userName: currentUser.displayName || currentUser.email
+                    });
+                });
+            }
+        })
+        .catch((error) => {
+            console.error('Error updating attendance status:', error);
+            showToast('Error updating attendance status.', 'error');
+        });
+}
 // Filter attendance history
 function filterAttendanceHistory() {
     const dateFilter = document.getElementById('historyDateFilter').value;
@@ -396,15 +471,16 @@ function filterAttendanceHistory() {
     const rows = document.getElementById('historyTableBody').querySelectorAll('tr');
     
     rows.forEach((row) => {
-        if (row.cells.length < 6) return; // Skip the no-data row
+        if (row.cells.length < 7) return; // Skip the no-data row
         
         const date = row.cells[2].textContent;
         const studentName = row.cells[0].textContent.toLowerCase();
-        const status = row.cells[4].querySelector('.status-badge').textContent.toLowerCase();
+        const statusElement = row.cells[4].querySelector('.status-badge');
+        const status = statusElement ? statusElement.textContent.toLowerCase().trim() : '';
         
         const dateMatch = !dateFilter || date === new Date(dateFilter).toLocaleDateString();
         const studentMatch = !studentFilter || studentName.includes(studentFilter);
-        const statusMatch = statusFilter === 'all' || status === statusFilter;
+        const statusMatch = statusFilter === 'all' || status.includes(statusFilter);
         
         if (dateMatch && studentMatch && statusMatch) {
             row.style.display = '';
@@ -546,7 +622,7 @@ function exportTodayAttendance() {
                 const data = doc.data();
                 attendanceData.push({
                     studentName: data.studentName || 'Unknown',
-                    studentId: data.studentId || 'N/A',
+                    studentEmail: data.studentEmail || data.studentId || 'N/A',
                     date: data.date,
                     time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
                     status: data.status
@@ -582,7 +658,7 @@ function exportDateRangeAttendance() {
                 const data = doc.data();
                 attendanceData.push({
                     studentName: data.studentName || 'Unknown',
-                    studentId: data.studentId || 'N/A',
+                    studentEmail: data.studentEmail || data.studentId || 'N/A',
                     date: data.date,
                     time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
                     status: data.status
@@ -608,7 +684,7 @@ function exportFullAttendance() {
                 const data = doc.data();
                 attendanceData.push({
                     studentName: data.studentName || 'Unknown',
-                    studentId: data.studentId || 'N/A',
+                    studentEmail: data.studentEmail || data.studentId || 'N/A',
                     date: data.date,
                     time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
                     status: data.status
@@ -648,7 +724,7 @@ function generatePDF(data, title) {
     // Generate table
     doc.autoTable({
         startY: 30,
-        head: [['Student Name', 'Student ID', 'Date', 'Time', 'Status']],
+        head: [['Student Name', 'Email', 'Date', 'Time', 'Status']],
         body: tableData,
         theme: 'grid',
         headStyles: {
