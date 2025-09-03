@@ -250,7 +250,7 @@ function loadPendingAttendance() {
     
     db.collection('attendance')
         .where('status', '==', 'pending')
-        .orderBy('timestamp', 'desc')
+        //.orderBy('timestamp', 'desc')
         .get()
         .then((querySnapshot) => {
             tbody.innerHTML = '';
@@ -346,7 +346,7 @@ function loadAttendanceHistory() {
     `;
     
     db.collection('attendance')
-        .orderBy('timestamp', 'desc')
+        //.orderBy('timestamp', 'desc')
         .get()
         .then((querySnapshot) => {
             tbody.innerHTML = '';
@@ -501,7 +501,7 @@ function filterAttendanceHistory() {
 // Load recent activities with enhanced error handling
 function loadRecentActivities() {
     return db.collection('activities')
-        .orderBy('timestamp', 'desc')
+        //.orderBy('timestamp', 'desc')
         .limit(5)
         .get()
         .then((querySnapshot) => {

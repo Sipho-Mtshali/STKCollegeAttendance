@@ -18,6 +18,36 @@ const db = firebase.firestore();
 let currentUser = null;
 let allUsers = [];
 let allAttendance = [];
+let studentsList = [];
+// Add this function to get student email
+function getStudentEmail(studentId, fallbackEmail) {
+    console.log('Looking for studentId:', studentId, 'Fallback:', fallbackEmail);
+    console.log('Students list:', studentsList);
+    
+    if (fallbackEmail && fallbackEmail !== 'N/A') return fallbackEmail;
+    if (!studentId || studentId === 'N/A') return 'N/A';
+
+    // Try different ways to find the student
+    let student = studentsList.find(s => s.studentId === studentId);
+    
+    // If not found by studentId, try by Firebase document ID
+    if (!student) {
+        student = studentsList.find(s => s.id === studentId);
+    }
+    
+    // If still not found, try by any field that might contain the student ID
+    if (!student) {
+        student = studentsList.find(s => 
+            s.studentId && s.studentId.includes(studentId) || 
+            studentId.includes(s.studentId)
+        );
+    }
+    
+    const email = student ? (student.email || student.studentEmail || student.userEmail || 'N/A') : 'N/A';
+    console.log('Found student:', student, 'Email:', email);
+    return email;
+}
+
 
 // Check authentication state with better debugging
 auth.onAuthStateChanged((user) => {
@@ -42,26 +72,63 @@ auth.onAuthStateChanged((user) => {
             
         checkAdminRole(user.uid);
         
-        // Add a small delay before loading data to ensure Firebase is ready
-        setTimeout(() => {
+        // Load students first, then other data
+        loadStudents().then(() => {
+            console.log('Students loaded, now loading dashboard and attendance');
             loadDashboardData();
             setupRealtimeListeners();
             setupNavigation();
-        }, 500);
+            
+            // If we're on the attendance section, load it too
+            if (document.getElementById('attendanceSection').style.display !== 'none') {
+                loadAllAttendance();
+            }
+        }).catch((error) => {
+            console.error('Error loading students:', error);
+            // Still try to load other data even if students fail
+            loadDashboardData();
+            setupRealtimeListeners();
+            setupNavigation();
+        });
     } else {
         console.log('No user authenticated, redirecting to login');
         window.location.href = 'login.html';
     }
 });
 
-// Function to open edit attendance modal
+// Add this function to load students (similar to teacher.js)
+function loadStudents() {
+    return db.collection('users').where('role', '==', 'student').get()
+        .then((querySnapshot) => {
+            studentsList = [];
+            querySnapshot.forEach((doc) => {
+                const studentData = {
+                    id: doc.id,
+                    ...doc.data()
+                };
+                studentsList.push(studentData);
+                console.log('Loaded student:', studentData);
+            });
+            console.log('Total students loaded:', studentsList.length);
+        })
+        .catch((error) => {
+            console.error('Error loading students:', error);
+            showToast('Error loading students.', 'error');
+        });
+}
+
+// Update the editAttendance function to use getStudentEmail
 function editAttendance(attendanceId) {
     const attendance = allAttendance.find(a => a.id === attendanceId);
     
     if (attendance) {
+        // Use getStudentEmail function to get the email
+        const studentEmail = getStudentEmail(attendance.studentId, attendance.studentEmail);
+        
         // Populate the form
         document.getElementById('editAttendanceId').value = attendanceId;
         document.getElementById('editStudentName').value = attendance.studentName || 'Unknown';
+        document.getElementById('editStudentEmail').value = studentEmail;
         document.getElementById('editAttendanceDate').value = new Date(attendance.timestamp.toDate()).toLocaleDateString();
         document.getElementById('editAttendanceTime').value = new Date(attendance.timestamp.toDate()).toLocaleTimeString();
         document.getElementById('editAttendanceStatus').value = attendance.status;
@@ -495,15 +562,26 @@ function filterUsers() {
     });
 }
 
-// Update the loadAllAttendance function to include edit button and show approver name
+// Update the loadAllAttendance function to use getStudentEmail
 function loadAllAttendance() {
     console.log('Loading all attendance...');
+    
+    // Show loading state
+    const tbody = document.getElementById('allAttendanceTableBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="7" style="text-align: center; padding: 2rem;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--primary); margin-bottom: 1rem; display: block;"></i>
+                <p style="color: var(--gray-500);">Loading attendance records...</p>
+            </td>
+        </tr>
+    `;
+    
     db.collection('attendance')
         .orderBy('timestamp', 'desc')
         .get()
         .then((querySnapshot) => {
             allAttendance = [];
-            const tbody = document.getElementById('allAttendanceTableBody');
             tbody.innerHTML = '';
             
             if (querySnapshot.empty) {
@@ -527,9 +605,12 @@ function loadAllAttendance() {
                 
                 const row = document.createElement('tr');
                 
+                // Use getStudentEmail function to get the email
+                const studentEmail = getStudentEmail(data.studentId, data.studentEmail);
+                
                 row.innerHTML = `
                     <td>${data.studentName || 'Unknown'}</td>
-                    <td>${data.studentId || 'N/A'}</td>
+                    <td>${studentEmail}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
                     <td><span class="status-badge ${data.status}">${data.status}</span></td>
@@ -553,6 +634,17 @@ function loadAllAttendance() {
         })
         .catch((error) => {
             console.error('Error loading attendance:', error);
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                        <p>Error loading attendance records. Please try again.</p>
+                        <button class="btn btn-primary" onclick="loadAllAttendance()" style="margin-top: 1rem;">
+                            <i class="fas fa-refresh"></i> Retry
+                        </button>
+                    </td>
+                </tr>
+            `;
             showToast('Error loading attendance records.', 'error');
         });
 }
@@ -710,9 +802,12 @@ function generateAttendanceReport() {
             
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
+                // Use getStudentEmail function to get the email
+                const studentEmail = getStudentEmail(data.studentId, data.studentEmail);
+                
                 attendanceData.push({
                     studentName: data.studentName,
-                    studentId: data.studentId || 'N/A',
+                    studentEmail: studentEmail,
                     date: data.date,
                     time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
                     status: data.status,
@@ -771,7 +866,36 @@ function generateSystemReport() {
         { metric: 'System Uptime', value: '99.9%' }
     ];
     
-    generatePDFReport(systemData, 'System Summary Report');
+    // Create a different format for system report
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFontSize(18);
+    doc.text('System Summary Report', 14, 15);
+    
+    // Add date
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+    
+    // Add data as table
+    doc.autoTable({
+        startY: 30,
+        head: [['Metric', 'Value']],
+        body: systemData.map(item => [item.metric, item.value]),
+        theme: 'grid',
+        headStyles: {
+            fillColor: [79, 70, 229],
+            textColor: 255
+        },
+        alternateRowStyles: {
+            fillColor: [243, 244, 246]
+        }
+    });
+    
+    // Save the PDF
+    doc.save(`System_Summary_Report_${new Date().getTime()}.pdf`);
+    showToast('System Summary Report downloaded successfully.', 'success');
 }
 
 // Generate PDF report
@@ -787,11 +911,26 @@ function generatePDFReport(data, title) {
     doc.setFontSize(10);
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
     
-    // Add data as table
+    // Add data as table with email column
     doc.autoTable({
         startY: 30,
-        head: [Object.keys(data[0])],
-        body: data.map(item => Object.values(item))
+        head: [['Student Name', 'Email', 'Date', 'Time', 'Status', 'Approved By']],
+        body: data.map(item => [
+            item.studentName,
+            item.studentEmail,
+            item.date,
+            item.time,
+            item.status.toUpperCase(),
+            item.approvedBy
+        ]),
+        theme: 'grid',
+        headStyles: {
+            fillColor: [79, 70, 229],
+            textColor: 255
+        },
+        alternateRowStyles: {
+            fillColor: [243, 244, 246]
+        }
     });
     
     // Save the PDF
@@ -799,41 +938,40 @@ function generatePDFReport(data, title) {
     showToast(`${title} downloaded successfully.`, 'success');
 }
 
-// Download individual attendance record
+// Update the downloadAttendanceRecord function to use getStudentEmail
 function downloadAttendanceRecord(attendanceId) {
-    db.collection('attendance').doc(attendanceId).get()
-        .then((doc) => {
-            if (doc.exists) {
-                const data = doc.data();
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF();
-                
-                // Add title
-                pdf.setFontSize(16);
-                pdf.text('Attendance Record', 14, 15);
-                
-                // Add details
-                pdf.setFontSize(10);
-                pdf.text(`Student: ${data.studentName}`, 14, 25);
-                pdf.text(`Student ID: ${data.studentId || 'N/A'}`, 14, 32);
-                pdf.text(`Date: ${new Date(data.timestamp.toDate()).toLocaleDateString()}`, 14, 39);
-                pdf.text(`Time: ${new Date(data.timestamp.toDate()).toLocaleTimeString()}`, 14, 46);
-                pdf.text(`Status: ${data.status}`, 14, 53);
-                
-                if (data.approvedBy) {
-                    pdf.text(`Approved By: ${data.approvedBy}`, 14, 60);
-                    pdf.text(`Approved At: ${new Date(data.approvedAt.toDate()).toLocaleString()}`, 14, 67);
-                }
-                
-                // Save the PDF
-                pdf.save(`Attendance_${data.studentName}_${new Date(data.timestamp.toDate()).toISOString().split('T')[0]}.pdf`);
-                showToast('Attendance record downloaded.', 'success');
+    const attendance = allAttendance.find(a => a.id === attendanceId);
+    
+    if (attendance) {
+        // Use getStudentEmail function to get the email
+        const studentEmail = getStudentEmail(attendance.studentId, attendance.studentEmail);
+        
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF();
+        
+        // Add title
+        pdf.setFontSize(16);
+        pdf.text('Attendance Record', 14, 15);
+        
+        // Add details
+        pdf.setFontSize(10);
+        pdf.text(`Student: ${attendance.studentName}`, 14, 25);
+        pdf.text(`Email: ${studentEmail}`, 14, 32);
+        pdf.text(`Date: ${new Date(attendance.timestamp.toDate()).toLocaleDateString()}`, 14, 39);
+        pdf.text(`Time: ${new Date(attendance.timestamp.toDate()).toLocaleTimeString()}`, 14, 46);
+        pdf.text(`Status: ${attendance.status}`, 14, 53);
+        
+        if (attendance.approvedBy) {
+            pdf.text(`Approved By: ${attendance.approvedBy}`, 14, 60);
+            if (attendance.approvedAt) {
+                pdf.text(`Approved At: ${new Date(attendance.approvedAt.toDate()).toLocaleString()}`, 14, 67);
             }
-        })
-        .catch((error) => {
-            console.error('Error downloading record:', error);
-            showToast('Error downloading record.', 'error');
-        });
+        }
+        
+        // Save the PDF
+        pdf.save(`Attendance_${attendance.studentName}_${new Date(attendance.timestamp.toDate()).toISOString().split('T')[0]}.pdf`);
+        showToast('Attendance record downloaded.', 'success');
+    }
 }
 
 // Export attendance as PDF
