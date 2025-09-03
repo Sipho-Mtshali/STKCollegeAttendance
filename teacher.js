@@ -19,6 +19,13 @@ let currentUser = null;
 let teacherData = null;
 let studentsList = [];
 
+function getStudentEmail(studentId, fallbackEmail) {
+    if (fallbackEmail && fallbackEmail !== 'N/A') return fallbackEmail;
+
+    const student = studentsList.find(s => s.studentId === studentId);
+    return student ? (student.email || student.studentEmail || student.userEmail || 'N/A') : 'N/A';
+}
+
 // Check authentication state
 auth.onAuthStateChanged((user) => {
     if (user) {
@@ -209,7 +216,7 @@ function loadDashboardData() {
 
 // Load students list
 function loadStudents() {
-    db.collection('users').where('role', '==', 'student').get()
+    return db.collection('users').where('role', '==', 'student').get()
         .then((querySnapshot) => {
             studentsList = [];
             querySnapshot.forEach((doc) => {
@@ -224,6 +231,7 @@ function loadStudents() {
             showToast('Error loading students.', 'error');
         });
 }
+
 
 // Load pending attendance with enhanced error handling
 function loadPendingAttendance() {
@@ -265,7 +273,7 @@ function loadPendingAttendance() {
                 
                 row.innerHTML = `
                     <td>${data.studentName || 'Unknown'}</td>
-                    <td>${data.studentEmail || data.studentId || 'N/A'}</td>
+                    <td>${getStudentEmail(data.studentId, data.studentEmail)}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
                     <td><span class="status-badge ${data.status}">${data.status}</span></td>
@@ -402,7 +410,7 @@ function loadAttendanceHistory() {
                 
                 row.innerHTML = `
                     <td>${data.studentName || 'Unknown'}</td>
-                    <td>${data.studentEmail || data.studentId || 'N/A'}</td>
+                    <td>${getStudentEmail(data.studentId, data.studentEmail)}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
                     <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
                     <td>${statusBadge}</td>
@@ -622,7 +630,7 @@ function exportTodayAttendance() {
                 const data = doc.data();
                 attendanceData.push({
                     studentName: data.studentName || 'Unknown',
-                    studentEmail: data.studentEmail || data.studentId || 'N/A',
+                    studentEmail: getStudentEmail(data.studentId, data.studentEmail),
                     date: data.date,
                     time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
                     status: data.status
@@ -658,7 +666,7 @@ function exportDateRangeAttendance() {
                 const data = doc.data();
                 attendanceData.push({
                     studentName: data.studentName || 'Unknown',
-                    studentEmail: data.studentEmail || data.studentId || 'N/A',
+                    studentEmail: getStudentEmail(data.studentId, data.studentEmail),
                     date: data.date,
                     time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
                     status: data.status
@@ -675,29 +683,33 @@ function exportDateRangeAttendance() {
 
 // Export full attendance with enhanced error handling
 function exportFullAttendance() {
-    db.collection('attendance')
-        .get()
-        .then((querySnapshot) => {
-            const attendanceData = [];
-            
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                attendanceData.push({
-                    studentName: data.studentName || 'Unknown',
-                    studentEmail: data.studentEmail || data.studentId || 'N/A',
-                    date: data.date,
-                    time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
-                    status: data.status
+    loadStudents().then(() => {
+        db.collection('attendance')
+            .get()
+            .then((querySnapshot) => {
+                const attendanceData = [];
+                
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    attendanceData.push({
+                        studentName: data.studentName || 'Unknown',
+                        studentEmail: getStudentEmail(data.studentId, data.studentEmail),
+                        date: data.date,
+                        time: new Date(data.timestamp.toDate()).toLocaleTimeString(),
+                        status: data.status
+                    });
                 });
+                
+                generatePDF(attendanceData, 'Full Attendance Report');
+            })
+            .catch((error) => {
+                console.error('Error exporting full attendance:', error);
+                showToast('Error generating report.', 'error');
             });
-            
-            generatePDF(attendanceData, 'Full Attendance Report');
-        })
-        .catch((error) => {
-            console.error('Error exporting full attendance:', error);
-            showToast('Error generating report.', 'error');
-        });
+    });
 }
+
+
 
 // Generate PDF report
 function generatePDF(data, title) {
