@@ -330,7 +330,7 @@ function showSection(sectionId) {
         case 'settings':
             pageTitle.textContent = 'System Settings';
             pageSubtitle.textContent = 'Configure system settings and preferences.';
-            loadSettings();
+            loadSettings(); // This line ensures settings are loaded when navigating to settings
             break;
     }
 }
@@ -818,35 +818,66 @@ function rejectAttendance(attendanceId) {
             showToast('Error rejecting attendance.', 'error');
         });
 }
-
-// Load settings
+// Load settings from Firestore
 function loadSettings() {
-    // This would typically load from a settings collection in Firestore
-    // For now, we'll set some default values
-    document.getElementById('schoolName').value = 'STK College';
-    document.getElementById('attendanceHours').value = '7:00 AM - 5:00 PM';
-    document.getElementById('adminEmail').value = 'admin@stkcollege.edu';
-    document.getElementById('systemTimezone').value = 'UTC';
+    db.collection('settings').doc('systemSettings').get()
+        .then((doc) => {
+            if (doc.exists) {
+                const settings = doc.data();
+                document.getElementById('schoolName').value = settings.schoolName || 'STK College';
+                document.getElementById('attendanceHours').value = settings.attendanceHours || '7:00 AM - 5:00 PM';
+                document.getElementById('adminEmail').value = settings.adminEmail || 'admin@stkcollege.edu';
+                document.getElementById('systemTimezone').value = settings.timezone || 'UTC';
+            } else {
+                // Set default values if no settings exist
+                document.getElementById('schoolName').value = 'STK College';
+                document.getElementById('attendanceHours').value = '7:00 AM - 5:00 PM';
+                document.getElementById('adminEmail').value = 'admin@stkcollege.edu';
+                document.getElementById('systemTimezone').value = 'UTC';
+            }
+        })
+        .catch((error) => {
+            console.error('Error loading settings:', error);
+            // Set default values on error
+            document.getElementById('schoolName').value = 'STK College';
+            document.getElementById('attendanceHours').value = '7:00 AM - 5:00 PM';
+            document.getElementById('adminEmail').value = 'admin@stkcollege.edu';
+            document.getElementById('systemTimezone').value = 'UTC';
+        });
 }
 
-// Save settings
+// Save settings to Firestore
 function saveSettings() {
     const schoolName = document.getElementById('schoolName').value;
     const attendanceHours = document.getElementById('attendanceHours').value;
     const adminEmail = document.getElementById('adminEmail').value;
     const timezone = document.getElementById('systemTimezone').value;
     
-    // In a real application, you would save these to Firestore
-    showToast('Settings saved successfully.', 'success');
-    
-    // Add activity log
-    db.collection('activities').add({
-        type: 'settings',
-        icon: 'fa-cog',
-        message: 'Admin updated system settings',
-        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        userId: currentUser.uid,
-        userName: currentUser.displayName || currentUser.email
+    // Save settings to Firestore
+    db.collection('settings').doc('systemSettings').set({
+        schoolName: schoolName,
+        attendanceHours: attendanceHours,
+        adminEmail: adminEmail,
+        timezone: timezone,
+        lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: currentUser.uid
+    })
+    .then(() => {
+        showToast('Settings saved successfully.', 'success');
+        
+        // Add activity log
+        db.collection('activities').add({
+            type: 'settings',
+            icon: 'fa-cog',
+            message: 'Admin updated system settings',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            userId: currentUser.uid,
+            userName: currentUser.displayName || currentUser.email
+        });
+    })
+    .catch((error) => {
+        console.error('Error saving settings:', error);
+        showToast('Error saving settings.', 'error');
     });
 }
 
@@ -1196,6 +1227,23 @@ function setupRealtimeListeners() {
     }, (error) => {
         console.error('Error with attendance listener:', error);
     });
+    
+    // Listen for changes in settings collection (optional)
+    db.collection('settings').doc('systemSettings').onSnapshot((doc) => {
+        console.log('Settings changed, updating form...');
+        if (doc.exists) {
+            const settings = doc.data();
+            // Only update if we're currently on the settings page
+            if (document.getElementById('settingsSection').style.display !== 'none') {
+                document.getElementById('schoolName').value = settings.schoolName || 'STK College';
+                document.getElementById('attendanceHours').value = settings.attendanceHours || '7:00 AM - 5:00 PM';
+                document.getElementById('adminEmail').value = settings.adminEmail || 'admin@stkcollege.edu';
+                document.getElementById('systemTimezone').value = settings.timezone || 'UTC';
+            }
+        }
+    }, (error) => {
+        console.error('Error with settings listener:', error);
+    });
 }
 
 // Format time ago
@@ -1280,6 +1328,7 @@ function deleteUser(userId) {
     }
 }
 
+// Enhanced delete user function that also deletes attendance records
 function performUserDeletion(userId, user) {
     // Disable the delete button to prevent multiple clicks
     const deleteBtn = document.getElementById('confirmDeleteBtn');
@@ -1287,16 +1336,31 @@ function performUserDeletion(userId, user) {
     deleteBtn.disabled = true;
     deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
     
-    // Delete from Firestore
-    db.collection('users').doc(userId).delete()
+    // First, find and delete all attendance records for this user
+    const deleteAttendancePromise = db.collection('attendance')
+        .where('studentId', '==', userId)
+        .get()
+        .then((querySnapshot) => {
+            const deletePromises = [];
+            querySnapshot.forEach((doc) => {
+                deletePromises.push(doc.ref.delete());
+            });
+            return Promise.all(deletePromises);
+        });
+    
+    // After attendance records are deleted, delete the user
+    deleteAttendancePromise
         .then(() => {
-            showToast('User deleted successfully.', 'success');
+            return db.collection('users').doc(userId).delete();
+        })
+        .then(() => {
+            showToast('User and all associated attendance records deleted successfully.', 'success');
             
             // Add activity log
             return db.collection('activities').add({
                 type: 'user',
                 icon: 'fa-user-times',
-                message: `Admin deleted user: ${user.email}`,
+                message: `Admin deleted user: ${user.email} and all their attendance records`,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                 userId: currentUser.uid,
                 userName: currentUser.displayName || currentUser.email
@@ -1310,7 +1374,7 @@ function performUserDeletion(userId, user) {
             return loadUsers(currentRoleFilter, currentSearchFilter);
         })
         .catch((error) => {
-            console.error('Error deleting user:', error);
+            console.error('Error deleting user or attendance records:', error);
             showToast('Error deleting user: ' + error.message, 'error');
         })
         .finally(() => {
