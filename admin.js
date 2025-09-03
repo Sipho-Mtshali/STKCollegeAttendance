@@ -21,31 +21,104 @@ let allAttendance = [];
 let studentsList = [];
 // Add this function to get student email
 function getStudentEmail(studentId, fallbackEmail) {
-    console.log('Looking for studentId:', studentId, 'Fallback:', fallbackEmail);
-    console.log('Students list:', studentsList);
-    
     if (fallbackEmail && fallbackEmail !== 'N/A') return fallbackEmail;
-    if (!studentId || studentId === 'N/A') return 'N/A';
 
-    // Try different ways to find the student
-    let student = studentsList.find(s => s.studentId === studentId);
+    const student = studentsList.find(s => s.studentId === studentId);
+    return student ? (student.email || student.studentEmail || student.userEmail || 'N/A') : 'N/A';
+}
+// Generate PDF report function (MOVE THIS TO THE TOP)
+function generatePDFReport(data, title, reportType = 'attendance') {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
     
-    // If not found by studentId, try by Firebase document ID
-    if (!student) {
-        student = studentsList.find(s => s.id === studentId);
+    // Add title
+    doc.setFontSize(18);
+    doc.text(title, 14, 15);
+    
+    // Add date
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+    
+    // Prepare table data based on report type
+    let head = [];
+    let body = [];
+    
+    if (reportType === 'attendance') {
+        // Attendance report format
+        head = [['Student Name', 'Email', 'Date', 'Time', 'Status', 'Approved By']];
+        body = data.map(item => [
+            item.studentName,
+            item.studentEmail,
+            item.date,
+            item.time,
+            item.status.toUpperCase(),
+            item.approvedBy
+        ]);
+    } else if (reportType === 'user') {
+        // User report format
+        head = [['Name', 'Email', 'Role', 'Created At']];
+        body = data.map(item => [
+            item.name,
+            item.email,
+            item.role,
+            item.createdAt
+        ]);
+    } else {
+        // Default format (for system reports)
+        head = [['Metric', 'Value']];
+        body = data.map(item => [item.metric, item.value]);
     }
     
-    // If still not found, try by any field that might contain the student ID
-    if (!student) {
-        student = studentsList.find(s => 
-            s.studentId && s.studentId.includes(studentId) || 
-            studentId.includes(s.studentId)
-        );
-    }
+    // Add data as table
+    doc.autoTable({
+        startY: 30,
+        head: head,
+        body: body,
+        theme: 'grid',
+        headStyles: {
+            fillColor: [79, 70, 229],
+            textColor: 255
+        },
+        alternateRowStyles: {
+            fillColor: [243, 244, 246]
+        }
+    });
     
-    const email = student ? (student.email || student.studentEmail || student.userEmail || 'N/A') : 'N/A';
-    console.log('Found student:', student, 'Email:', email);
-    return email;
+    // Save the PDF
+    doc.save(`${title.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
+    showToast(`${title} downloaded successfully.`, 'success');
+}
+// Generate user report
+function generateUserReport() {
+    db.collection('users').get()
+        .then((querySnapshot) => {
+            const userData = [];
+            const roleCounts = {
+                admin: 0,
+                teacher: 0,
+                student: 0
+            };
+            
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                userData.push({
+                    name: data.name || 'N/A',
+                    email: data.email,
+                    role: data.role,
+                    createdAt: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A'
+                });
+                
+                if (roleCounts.hasOwnProperty(data.role)) {
+                    roleCounts[data.role]++;
+                }
+            });
+            
+            generatePDFReport(userData, 'User Statistics Report', 'user');
+        })
+        .catch((error) => {
+            console.error('Error generating user report:', error);
+            showToast('Error generating user report.', 'error');
+        });
 }
 
 
@@ -823,39 +896,6 @@ function generateAttendanceReport() {
         });
 }
 
-// Generate user report
-function generateUserReport() {
-    db.collection('users').get()
-        .then((querySnapshot) => {
-            const userData = [];
-            const roleCounts = {
-                admin: 0,
-                teacher: 0,
-                student: 0
-            };
-            
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                userData.push({
-                    name: data.name || 'N/A',
-                    email: data.email,
-                    role: data.role,
-                    createdAt: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A'
-                });
-                
-                if (roleCounts.hasOwnProperty(data.role)) {
-                    roleCounts[data.role]++;
-                }
-            });
-            
-            generatePDFReport(userData, 'User Statistics Report');
-        })
-        .catch((error) => {
-            console.error('Error generating user report:', error);
-            showToast('Error generating user report.', 'error');
-        });
-}
-
 // Generate system report
 function generateSystemReport() {
     // This would typically gather various system statistics
@@ -896,46 +936,6 @@ function generateSystemReport() {
     // Save the PDF
     doc.save(`System_Summary_Report_${new Date().getTime()}.pdf`);
     showToast('System Summary Report downloaded successfully.', 'success');
-}
-
-// Generate PDF report
-function generatePDFReport(data, title) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    // Add title
-    doc.setFontSize(18);
-    doc.text(title, 14, 15);
-    
-    // Add date
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
-    
-    // Add data as table with email column
-    doc.autoTable({
-        startY: 30,
-        head: [['Student Name', 'Email', 'Date', 'Time', 'Status', 'Approved By']],
-        body: data.map(item => [
-            item.studentName,
-            item.studentEmail,
-            item.date,
-            item.time,
-            item.status.toUpperCase(),
-            item.approvedBy
-        ]),
-        theme: 'grid',
-        headStyles: {
-            fillColor: [79, 70, 229],
-            textColor: 255
-        },
-        alternateRowStyles: {
-            fillColor: [243, 244, 246]
-        }
-    });
-    
-    // Save the PDF
-    doc.save(`${title.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`);
-    showToast(`${title} downloaded successfully.`, 'success');
 }
 
 // Update the downloadAttendanceRecord function to use getStudentEmail
