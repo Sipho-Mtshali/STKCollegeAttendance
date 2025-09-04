@@ -497,18 +497,20 @@ function loadAttendanceHistory() {
         const date = new Date(record.date);
         const formattedDate = date.toLocaleDateString();
         const formattedTime = record.timestamp ? record.timestamp.toDate().toLocaleTimeString() : 'N/A';
-        
+        // Show notes/remarks as comment, especially for rejected attendance
+        const comment = record.status === 'rejected' ? (record.notes || 'No comment provided') : 'N/A';
         row.innerHTML = `
             <td>${formattedDate}</td>
             <td>${formattedTime}</td>
             <td><span class="status-badge ${record.status}">${record.status}</span></td>
             <td>${record.approvedBy || 'N/A'}</td>
-            <td>${record.remarks || 'N/A'}</td>
+            <td>${comment || 'N/A'}</td>
         `;
         
         tableBody.appendChild(row);
     });
 }
+
 
 // Filter attendance history
 function filterAttendance() {
