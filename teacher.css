@@ -72,6 +72,18 @@
             justify-content: center;
             margin-right: 12px;
         }
+        .logo img {
+            width: 150%;
+            height: 150%;
+            object-fit: contain;
+            border-radius: 50%;
+            padding-top: 10px;
+        }
+
+        /* Remove the icon styling */
+        .logo .fa-graduation-cap {
+            display: none;
+        }
 
         .logo i {
             font-size: 24px;

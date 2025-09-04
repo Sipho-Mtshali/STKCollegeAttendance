@@ -79,6 +79,18 @@ body {
     color: white;
     font-size: 2rem;
 }
+.logo img {
+    width: 150%;
+    height: 150%;
+    object-fit: contain;
+    border-radius: 50%;
+    padding-top: 10px;
+}
+
+/* Remove the icon styling */
+.logo .fa-graduation-cap {
+    display: none;
+}
 
 .logo-section h1 {
     font-size: 1.875rem;

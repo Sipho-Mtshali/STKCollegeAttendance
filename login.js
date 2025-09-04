@@ -1,4 +1,4 @@
-        // Firebase configuration
+ // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDV1Wcl9a19chq6JsVR-TCDQhT0tS1BzFo",
             authDomain: "stkcollegeattendance.firebaseapp.com",
@@ -18,6 +18,7 @@
         auth.setPersistence(firebase.auth.Auth.Persistence.SESSION)
             .catch((error) => {
                 console.error("Error setting auth persistence:", error);
+                showToast('Error initializing application. Please refresh the page.', 'danger');
             });
 
         // DOM Elements
@@ -44,7 +45,7 @@
             }
         });
 
-        // Show toast notification
+        // Show toast notification at top center
         function showToast(message, type = 'success') {
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
@@ -53,23 +54,34 @@
                 ${message}
             `;
             
-            document.getElementById('toastContainer').appendChild(toast);
+            const toastContainer = document.getElementById('toastContainer');
+            toastContainer.appendChild(toast);
             
-            // Remove toast after 3 seconds
+            // Remove toast after 5 seconds
             setTimeout(() => {
-                toast.remove();
-            }, 3000);
+                toast.style.animation = 'slideIn 0.3s ease reverse forwards';
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 5000);
+            
+            // Allow manual dismissal
+            toast.addEventListener('click', () => {
+                toast.style.animation = 'slideIn 0.3s ease reverse forwards';
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            });
         }
 
-        // Show error message
+        // Show error message (now using danger toast)
         function showError(message) {
-            errorText.textContent = message;
-            errorMessage.classList.add('show');
+            showToast(message, 'danger');
         }
 
-        // Hide error message
+        // Hide error message (no longer needed with toast)
         function hideError() {
-            errorMessage.classList.remove('show');
+            // Toast notifications auto-dismiss
         }
 
         // Handle form submission
@@ -92,13 +104,17 @@
                 firebase.auth.Auth.Persistence.LOCAL : 
                 firebase.auth.Auth.Persistence.SESSION;
             
-            await auth.setPersistence(persistence);
+            try {
+                await auth.setPersistence(persistence);
+            } catch (error) {
+                console.error("Error setting persistence:", error);
+                // Continue anyway as this is not a critical error
+            }
             
             // Show loading state
-            loginButton.innerHTML = '';
-            loginButton.classList.add('btn-loading');
+            const btnText = loginButton.querySelector('.btn-text');
+            btnText.textContent = 'Signing In...';
             loginButton.disabled = true;
-            hideError();
             
             try {
                 // Sign in with Firebase Auth
@@ -142,11 +158,11 @@
                 console.error('Login error:', error);
                 
                 // Reset button state
-                loginButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
-                loginButton.classList.remove('btn-loading');
+                const btnText = loginButton.querySelector('.btn-text');
+                btnText.textContent = 'Sign In';
                 loginButton.disabled = false;
                 
-                // Show appropriate error message
+                // Show appropriate error message as danger toast
                 let errorMessage = 'Login failed. Please try again.';
                 
                 switch (error.code) {
