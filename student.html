@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="transparentLogo.png">
     <title>STK College - Student Dashboard</title>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -267,17 +268,46 @@
                             </div>
                         </div>
                         
-                        <div style="margin-top: 2rem;">
-                            <h3>Attendance Rate</h3>
-                            <div style="background: var(--gray-200); height: 24px; border-radius: 12px; margin: 1rem 0; overflow: hidden;">
-                                <div id="attendanceRateBar" style="height: 100%; background: var(--secondary); width: 0%; transition: width 0.5s ease;"></div>
+                        <div class="statistics-container">
+                            <div class="streak-counter">
+                                <i class="fas fa-fire"></i>
+                                <div class="streak-info">
+                                    <h3 id="currentStreak">0 days</h3>
+                                    <p>Current attendance streak</p>
+                                </div>
                             </div>
-                            <p id="attendanceRateText">0% attendance rate</p>
+                            
+                            <div class="stat-row">
+                                <div class="stat-chart">
+                                    <h3>Attendance Rate</h3>
+                                    <div class="attendance-rate-bar">
+                                        <div id="attendanceRateBar" class="attendance-rate-fill">0%</div>
+                                    </div>
+                                    <p id="attendanceRateText">0% attendance rate</p>
+                                </div>
+                                
+                                <div class="stat-chart">
+                                    <h3>Status Distribution</h3>
+                                    <div class="chart-container">
+                                        <canvas id="statusChart" width="200" height="200"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="monthly-stats">
+                                <h3>Monthly Overview</h3>
+                                <div class="monthly-grid" id="monthlyGrid">
+                                    <!-- Monthly stats will be populated here -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
+    
+    <!-- Chart.js for statistics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>
 </html>

@@ -137,7 +137,7 @@
                     throw new Error(`You are not registered as a ${selectedRole}. Please select the correct role.`);
                 }
                 
-                showToast('Login successful! Redirecting...');
+                showToast('Login successful! Redirecting to your dashboard...');
                 
                 // Redirect based on role after a brief delay
                 setTimeout(() => {
