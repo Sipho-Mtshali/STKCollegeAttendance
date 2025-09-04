@@ -523,6 +523,7 @@ function updateStatistics() {
 }
 
 // Load recent activity
+// Load recent activity - Only show activities related to this student
 function loadRecentActivity() {
     const activityList = document.getElementById('activityList');
     if (!activityList) return;
@@ -530,7 +531,9 @@ function loadRecentActivity() {
     // Clear existing items
     activityList.innerHTML = '';
 
-    // Get recent activities (last 5)
+    // Get recent activities that mention this student
+    const studentName = studentData ? studentData.name : (currentUser.displayName || currentUser.email.split('@')[0]);
+    
     db.collection('activities')
         .orderBy('timestamp', 'desc')
         .limit(5)
@@ -543,23 +546,32 @@ function loadRecentActivity() {
 
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                const item = document.createElement('li');
-                item.className = 'activity-item';
                 
-                const time = data.timestamp ? data.timestamp.toDate().toLocaleTimeString() : 'N/A';
-                
-                item.innerHTML = `
-                    <div class="activity-icon blue">
-                        <i class="fas ${data.icon || 'fa-bell'}"></i>
-                    </div>
-                    <div class="activity-content">
-                        <p>${data.message}</p>
-                        <span class="activity-time">${time}</span>
-                    </div>
-                `;
-                
-                activityList.appendChild(item);
+                // Only show activities that mention this student specifically
+                if (data.message && data.message.includes(studentName)) {
+                    const item = document.createElement('li');
+                    item.className = 'activity-item';
+                    
+                    const time = data.timestamp ? data.timestamp.toDate().toLocaleTimeString() : 'N/A';
+                    
+                    item.innerHTML = `
+                        <div class="activity-icon blue">
+                            <i class="fas ${data.icon || 'fa-bell'}"></i>
+                        </div>
+                        <div class="activity-content">
+                            <p>${data.message}</p>
+                            <span class="activity-time">${time}</span>
+                        </div>
+                    `;
+                    
+                    activityList.appendChild(item);
+                }
             });
+
+            // If no activities were added, show message
+            if (activityList.children.length === 0) {
+                activityList.innerHTML = '<li class="empty-state">No recent activity related to you</li>';
+            }
         })
         .catch((error) => {
             console.error('Error loading activities:', error);
