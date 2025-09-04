@@ -73,19 +73,50 @@
                     <h1>Student Dashboard</h1>
                     <p>Welcome back! Here's your attendance summary.</p>
                 </div>
-                <div class="user-menu">
-                    <div class="user-info">
-                        <img src="https://ui-avatars.com/api/?name=Student+User&background=4f46e5&color=fff" alt="Student User">
-                        <div>
-                            <div id="userNameDisplay">Student User</div>
-                            <small>Student</small>
-                        </div>
-                    </div>
-                    <button class="logout-btn" onclick="logout()">
-                        <i class="fas fa-sign-out-alt"></i>
-                        Logout
-                    </button>
+<!-- In the header section of student.html -->
+<div class="user-menu">
+    <div class="user-info" onclick="showProfileModal()" style="cursor: pointer;">
+        <img src="https://ui-avatars.com/api/?name=Student+User&background=4f46e5&color=fff" alt="Student User">
+        <div>
+            <div id="userNameDisplay">Student User</div>
+            <small>Student</small>
+        </div>
+    </div>
+    <button class="logout-btn" onclick="logout()">
+        <i class="fas fa-sign-out-alt"></i>
+        Logout
+    </button>
+</div>
+
+<!-- Add this modal at the end of the body, before the Chart.js script -->
+<div id="profileModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Profile</h2>
+            <span class="close" onclick="closeProfileModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="profileForm">
+                <div class="form-group">
+                    <label for="profileName">Full Name</label>
+                    <input type="text" id="profileName" class="form-control" required>
                 </div>
+                <div class="form-group">
+                    <label for="profilePassword">New Password (leave blank to keep current)</label>
+                    <input type="password" id="profilePassword" class="form-control" placeholder="Enter new password">
+                </div>
+                <div class="form-group">
+                    <label for="profileConfirmPassword">Confirm New Password</label>
+                    <input type="password" id="profileConfirmPassword" class="form-control" placeholder="Confirm new password">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
             </header>
 
             <!-- Dashboard Section -->
@@ -306,7 +337,35 @@
             </div>
         </main>
     </div>
-    
+    <!-- Add this modal at the end of the body, before the Chart.js script -->
+<div id="profileModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Profile</h2>
+            <span class="close" onclick="closeProfileModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="profileForm">
+                <div class="form-group">
+                    <label for="profileName">Full Name</label>
+                    <input type="text" id="profileName" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="profilePassword">New Password (leave blank to keep current)</label>
+                    <input type="password" id="profilePassword" class="form-control" placeholder="Enter new password">
+                </div>
+                <div class="form-group">
+                    <label for="profileConfirmPassword">Confirm New Password</label>
+                    <input type="password" id="profileConfirmPassword" class="form-control" placeholder="Confirm new password">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
     <!-- Chart.js for statistics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>

@@ -663,3 +663,136 @@ document.addEventListener('DOMContentLoaded', function() {
     setupMobileMenu();
     showSection('dashboard');
 });
+// Show profile modal
+function showProfileModal() {
+    const modal = document.getElementById('profileModal');
+    if (!modal) return;
+    
+    // Fill the form with current user data
+    document.getElementById('profileName').value = studentData ? studentData.name : (currentUser.displayName || currentUser.email.split('@')[0]);
+    document.getElementById('profilePassword').value = '';
+    document.getElementById('profileConfirmPassword').value = '';
+    
+    modal.style.display = 'flex';
+}
+
+// Close profile modal
+function closeProfileModal() {
+    const modal = document.getElementById('profileModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Handle profile form submission
+function handleProfileUpdate(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('profileName').value.trim();
+    const password = document.getElementById('profilePassword').value;
+    const confirmPassword = document.getElementById('profileConfirmPassword').value;
+    
+    // Validate form
+    if (!name) {
+        showToast('Please enter your name', 'error');
+        return;
+    }
+    
+    if (password && password !== confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+    
+    if (password && password.length < 6) {
+        showToast('Password should be at least 6 characters', 'error');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = document.querySelector('#profileForm button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Saving...';
+    
+    // Update profile
+    updateProfile(name, password)
+        .then(() => {
+            showToast('Profile updated successfully', 'success');
+            closeProfileModal();
+        })
+        .catch((error) => {
+            console.error('Error updating profile:', error);
+            showToast('Error updating profile: ' + error.message, 'error');
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        });
+}
+
+// Update profile in Firebase
+function updateProfile(name, password) {
+    const promises = [];
+    
+    // Update user display name in Firebase Auth
+    if (currentUser.displayName !== name) {
+        promises.push(
+            currentUser.updateProfile({
+                displayName: name
+            })
+        );
+    }
+    
+    // Update password if provided
+    if (password) {
+        promises.push(currentUser.updatePassword(password));
+    }
+    
+    // Update student document in Firestore
+    if (studentData && studentData.name !== name) {
+        promises.push(
+            db.collection('students').doc(studentData.id).update({
+                name: name,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            })
+        );
+        
+        // Also update the user document
+        promises.push(
+            db.collection('users').doc(currentUser.uid).update({
+                name: name,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            })
+        );
+    }
+    
+    return Promise.all(promises)
+        .then(() => {
+            // Update UI with new name
+            document.getElementById('userNameDisplay').textContent = name;
+            if (studentData) {
+                studentData.name = name;
+            }
+        });
+}
+
+// Add event listener for the profile form
+document.addEventListener('DOMContentLoaded', function() {
+    const profileForm = document.getElementById('profileForm');
+    if (profileForm) {
+        profileForm.addEventListener('submit', handleProfileUpdate);
+    }
+    
+    // Close modal when clicking outside
+    const modal = document.getElementById('profileModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeProfileModal();
+            }
+        });
+    }
+    
+    // Initialize other functions
+    initMarkAttendanceButton();
+    setupMobileMenu();
+    showSection('dashboard');
+});
