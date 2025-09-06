@@ -68,8 +68,8 @@ body {
 }
 
 .logo {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     background: linear-gradient(180deg, var(--primary), var(--primary-dark));
     border-radius: 50%;
     display: flex;
@@ -80,11 +80,11 @@ body {
     font-size: 2rem;
 }
 .logo img {
-    width: 150%;
-    height: 150%;
+    width: 110%;
+    height: 110%;
     object-fit: contain;
     border-radius: 50%;
-    padding-top: 10px;
+
 }
 
 /* Remove the icon styling */
