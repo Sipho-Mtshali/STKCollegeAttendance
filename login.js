@@ -1,4 +1,4 @@
- // Firebase configuration
+// Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDV1Wcl9a19chq6JsVR-TCDQhT0tS1BzFo",
             authDomain: "stkcollegeattendance.firebaseapp.com",
@@ -29,7 +29,6 @@
         const loginButton = document.getElementById('loginButton');
         const errorMessage = document.getElementById('errorMessage');
         const errorText = document.getElementById('errorText');
-        const roleRadios = document.querySelectorAll('input[name="role"]');
         const rememberMe = document.getElementById('rememberMe');
 
         // Toggle password visibility
@@ -90,7 +89,6 @@
             
             const email = emailInput.value.trim();
             const password = passwordInput.value;
-            const selectedRole = document.querySelector('input[name="role"]:checked').value;
             const remember = rememberMe.checked;
             
             // Basic validation
@@ -130,18 +128,13 @@
                 }
                 
                 const userData = userDoc.data();
-                
-                // Verify role matches selection
-                if (userData.role !== selectedRole) {
-                    await auth.signOut();
-                    throw new Error(`You are not registered as a ${selectedRole}. Please select the correct role.`);
-                }
+                const userRole = userData.role;
                 
                 showToast('Login successful! Redirecting to your dashboard...');
                 
                 // Redirect based on role after a brief delay
                 setTimeout(() => {
-                    switch (selectedRole) {
+                    switch (userRole) {
                         case 'admin':
                             window.location.href = 'admin.html';
                             break;
@@ -151,6 +144,12 @@
                         case 'student':
                             window.location.href = 'student.html';
                             break;
+                        default:
+                            showError('Unknown user role. Please contact administrator.');
+                            // Reset button state
+                            const btnText = loginButton.querySelector('.btn-text');
+                            btnText.textContent = 'Sign In';
+                            loginButton.disabled = false;
                     }
                 }, 1500);
                 

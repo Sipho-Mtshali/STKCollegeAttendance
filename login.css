@@ -258,49 +258,6 @@ body {
     }
 }
         /* Additional styles for login-specific elements */
-        .role-selection {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 0.8rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .role-option {
-            position: relative;
-        }
-
-        .role-option input {
-            position: absolute;
-            opacity: 0;
-            cursor: pointer;
-        }
-
-        .role-label {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 0.8rem 0.5rem;
-            background: var(--gray-100);
-            border: 2px solid transparent;
-            border-radius: var(--radius);
-            cursor: pointer;
-            transition: var(--transition);
-            text-align: center;
-            font-size: 0.85rem;
-        }
-
-        .role-option input:checked + .role-label {
-            background: rgba(79, 70, 229, 0.1);
-            border-color: var(--primary);
-            color: var(--primary);
-        }
-
-        .role-label i {
-            font-size: 1.2rem;
-            margin-bottom: 0.4rem;
-        }
-
         .remember-forgot {
             display: flex;
             justify-content: space-between;
