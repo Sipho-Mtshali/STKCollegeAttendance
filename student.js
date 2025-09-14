@@ -34,6 +34,27 @@ auth.onAuthStateChanged((user) => {
         window.location.href = 'login.html';
     }
 });
+// Setup navigation
+// Setup navigation
+function setupNavigation() {
+    // Add click event listeners to all nav links
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all links
+            navLinks.forEach(l => l.classList.remove('active'));
+            
+            // Add active class to clicked link
+            this.classList.add('active');
+            
+            // Show the corresponding section
+            const section = this.getAttribute('data-section');
+            showSection(section);
+        });
+    });
+}
 
 // Check if user has student role - ENHANCED VERSION
 function checkStudentRole(uid) {
@@ -173,24 +194,41 @@ function setupMobileMenu() {
     
     if (!menuToggle || !sidebar) return;
 
-    if (window.innerWidth <= 768) menuToggle.style.display = 'flex';
+    // Show menu toggle on mobile
+    if (window.innerWidth <= 992) {
+        menuToggle.style.display = 'flex';
+        sidebar.classList.remove('open');
+    }
 
-    menuToggle.addEventListener('click', () => {
+    menuToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
         sidebar.classList.toggle('open');
     });
 
+    // Close sidebar when clicking outside on mobile
     document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768 && 
+        if (window.innerWidth <= 992 && 
+            sidebar.classList.contains('open') && 
             !sidebar.contains(e.target) && 
-            !menuToggle.contains(e.target) &&
-            sidebar.classList.contains('open')) {
+            !menuToggle.contains(e.target)) {
             sidebar.classList.remove('open');
         }
     });
 
+    // Close sidebar when a nav link is clicked on mobile
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', function() {
+            if (window.innerWidth <= 992) {
+                sidebar.classList.remove('open');
+            }
+        });
+    });
+
     window.addEventListener('resize', () => {
-        if (window.innerWidth <= 768) menuToggle.style.display = 'flex';
-        else {
+        if (window.innerWidth <= 992) {
+            menuToggle.style.display = 'flex';
+            sidebar.classList.remove('open');
+        } else {
             menuToggle.style.display = 'none';
             sidebar.classList.remove('open');
         }
@@ -906,5 +944,34 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize other functions
     initMarkAttendanceButton();
     setupMobileMenu();
+    setupNavigation();
     showSection('dashboard');
+});
+// Toggle sidebar on mobile
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// Close sidebar when clicking outside on mobile
+document.addEventListener('click', function(event) {
+    const sidebar = document.querySelector('.sidebar');
+    const menuToggle = document.querySelector('.menu-toggle');
+    
+    if (window.innerWidth <= 992 && 
+        sidebar.classList.contains('open') && 
+        !sidebar.contains(event.target) && 
+        !menuToggle.contains(event.target)) {
+        sidebar.classList.remove('open');
+    }
+});
+
+// Close sidebar when a nav link is clicked on mobile
+document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', function() {
+        if (window.innerWidth <= 992) {
+            const sidebar = document.querySelector('.sidebar');
+            sidebar.classList.remove('open');
+        }
+    });
 });

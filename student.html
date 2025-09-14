@@ -16,13 +16,12 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <!-- Toast Container -->
-    <div class="toast-container" id="toastContainer"></div>
-
-    <!-- Mobile Menu Toggle -->
-    <button class="menu-toggle" id="menuToggle" style="display: none;">
+        <!-- Mobile Menu Toggle -->
+    <button class="menu-toggle mobile-only" onclick="toggleSidebar()">
         <i class="fas fa-bars"></i>
     </button>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
 
     <!-- Dashboard Container -->
     <div class="dashboard-container">
@@ -40,25 +39,25 @@
 
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#" class="nav-link active" onclick="showSection('dashboard')">
+                    <a href="#" class="nav-link active" data-section="dashboard">
                         <i class="fas fa-home"></i>
                         <span>Dashboard</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('attendance')">
+                    <a href="#" class="nav-link" data-section="attendance">
                         <i class="fas fa-hand-paper"></i>
                         <span>Mark Attendance</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('history')">
+                    <a href="#" class="nav-link" data-section="history">
                         <i class="fas fa-history"></i>
                         <span>Attendance History</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="showSection('stats')">
+                    <a href="#" class="nav-link" data-section="stats">
                         <i class="fas fa-chart-bar"></i>
                         <span>My Statistics</span>
                     </a>
