@@ -21,11 +21,51 @@ let allAttendance = [];
 let studentsList = [];
 // Add this function to get student email
 function getStudentEmail(studentId, fallbackEmail) {
-    if (fallbackEmail && fallbackEmail !== 'N/A') return fallbackEmail;
-
-    const student = studentsList.find(s => s.studentId === studentId);
-    return student ? (student.email || student.studentEmail || student.userEmail || 'N/A') : 'N/A';
+    console.log('Looking up email for studentId:', studentId, 'Fallback:', fallbackEmail);
+    
+    // If we have a valid fallback email, and no studentId, use fallback
+    if ((!studentId || studentId === '') && fallbackEmail && fallbackEmail !== 'N/A' && fallbackEmail !== 'Unknown' && fallbackEmail !== '') {
+        console.log('Using fallback email:', fallbackEmail);
+        return fallbackEmail;
+    }
+    
+    // If no studentId provided, return fallback or 'N/A'
+    if (!studentId || studentId === '') {
+        console.log('No studentId provided, returning fallback or N/A');
+        return fallbackEmail || 'N/A';
+    }
+    
+    // Try to find the student by studentId field (STU-XXXXXXX format)
+    const studentByStudentId = studentsList.find(s => s.studentId === studentId);
+    console.log('Found student by studentId:', studentByStudentId);
+    
+    if (studentByStudentId && studentByStudentId.email) {
+        console.log('Returning email from studentId match:', studentByStudentId.email);
+        return studentByStudentId.email;
+    }
+    
+    // Try to find by userId (in case studentId in attendance is actually a userId)
+    const studentByUserId = studentsList.find(s => s.userId === studentId || s.id === studentId);
+    console.log('Found student by userId:', studentByUserId);
+    
+    if (studentByUserId && studentByUserId.email) {
+        console.log('Returning email from userId match:', studentByUserId.email);
+        return studentByUserId.email;
+    }
+    
+    // If still no match, try to find by name (less reliable but might work)
+    if (fallbackEmail && fallbackEmail !== 'N/A' && fallbackEmail !== 'Unknown') {
+        const studentByEmail = studentsList.find(s => s.email === fallbackEmail);
+        if (studentByEmail) {
+            console.log('Found student by email match:', studentByEmail.email);
+            return studentByEmail.email;
+        }
+    }
+    
+    console.log('No student found, returning fallback or N/A');
+    return fallbackEmail || 'N/A';
 }
+
 // Generate PDF report function (MOVE THIS TO THE TOP)
 function generatePDFReport(data, title, reportType = 'attendance') {
     const { jsPDF } = window.jspdf;
@@ -171,22 +211,84 @@ auth.onAuthStateChanged((user) => {
 
 // Add this function to load students (similar to teacher.js)
 function loadStudents() {
-    return db.collection('users').where('role', '==', 'student').get()
-        .then((querySnapshot) => {
+    console.log('Loading students from both users and students collections...');
+    
+    // Load students from users collection (for basic user info)
+    const usersPromise = db.collection('users').where('role', '==', 'student').get();
+    
+    // Load students from students collection (for student-specific data like studentId)
+    const studentsPromise = db.collection('students').get();
+    
+    return Promise.all([usersPromise, studentsPromise])
+        .then(([usersSnapshot, studentsSnapshot]) => {
             studentsList = [];
-            querySnapshot.forEach((doc) => {
-                const studentData = {
-                    id: doc.id,
+            
+            // First, load all users with student role
+            const userStudents = {};
+            usersSnapshot.forEach((doc) => {
+                const userData = {
+                    id: doc.id, // Firestore document ID (same as userId)
                     ...doc.data()
                 };
-                studentsList.push(studentData);
-                console.log('Loaded student:', studentData);
+                userStudents[doc.id] = userData;
             });
+            
+            // Then, merge with students collection data
+            studentsSnapshot.forEach((doc) => {
+                const studentData = doc.data();
+                const userId = studentData.userId;
+                
+                // Find corresponding user data
+                const userData = userStudents[userId];
+                
+                if (userData) {
+                    // Merge user data with student data
+                    const mergedStudent = {
+                        id: doc.id, // students collection document ID
+                        userId: userId, // users collection document ID
+                        studentId: studentData.studentId, // STU-XXXXXXX format
+                        name: userData.name || studentData.name,
+                        email: userData.email,
+                        ...studentData,
+                        ...userData // userData takes precedence for common fields
+                    };
+                    studentsList.push(mergedStudent);
+                    console.log('Loaded merged student:', mergedStudent.name, 'with studentId:', mergedStudent.studentId, 'and email:', mergedStudent.email);
+                } else {
+                    // Student data exists but no corresponding user - add anyway
+                    const studentOnly = {
+                        id: doc.id,
+                        ...studentData,
+                        email: studentData.email || 'No email found'
+                    };
+                    studentsList.push(studentOnly);
+                    console.log('Loaded student without user data:', studentOnly);
+                }
+            });
+            
+            // Add any user students that don't have student collection entries
+            Object.values(userStudents).forEach(userData => {
+                const hasStudentRecord = studentsList.some(s => s.userId === userData.id);
+                if (!hasStudentRecord) {
+                    const userOnlyStudent = {
+                        id: userData.id,
+                        userId: userData.id,
+                        studentId: userData.studentId || '', // May not exist
+                        ...userData
+                    };
+                    studentsList.push(userOnlyStudent);
+                    console.log('Loaded user without student data:', userOnlyStudent);
+                }
+            });
+            
             console.log('Total students loaded:', studentsList.length);
+            console.log('Students list:', studentsList);
+            return studentsList;
         })
         .catch((error) => {
             console.error('Error loading students:', error);
             showToast('Error loading students.', 'error');
+            throw error;
         });
 }
 
@@ -650,76 +752,84 @@ function loadAllAttendance() {
         </tr>
     `;
     
-    db.collection('attendance')
-        .orderBy('timestamp', 'desc')
-        .get()
-        .then((querySnapshot) => {
-            allAttendance = [];
-            tbody.innerHTML = '';
-            
-            if (querySnapshot.empty) {
+    // First ensure students are loaded, then load attendance
+    loadStudents().then(() => {
+        console.log('Students loaded, now loading attendance. Students count:', studentsList.length);
+        
+        db.collection('attendance')
+            .orderBy('timestamp', 'desc')
+            .get()
+            .then((querySnapshot) => {
+                allAttendance = [];
+                tbody.innerHTML = '';
+                
+                if (querySnapshot.empty) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 2rem;">
+                                <i class="fas fa-clipboard-check" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
+                                <p style="color: var(--gray-500);">No attendance records found</p>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                querySnapshot.forEach((doc) => {
+                    const data = {
+                        id: doc.id,
+                        ...doc.data()
+                    };
+                    allAttendance.push(data);
+                    
+                    const row = document.createElement('tr');
+                    
+                    // Get student email from the students list
+                    const studentEmail = getStudentEmail(data.studentId, data.studentEmail);
+                    
+                    row.innerHTML = `
+                        <td>${data.studentName || 'Unknown'}</td>
+                        <td>${studentEmail}</td>
+                        <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
+                        <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
+                        <td><span class="status-badge ${data.status}">${data.status}</span></td>
+                        <td>${data.approvedBy || '-'}</td>
+                        <td>
+                            <div class="attendance-actions">
+                                <button class="btn-status edit" onclick="editAttendance('${doc.id}')" title="Edit Status">
+                                    <i class="fas fa-edit"></i>
+                                    <span>Edit</span>
+                                </button>
+                                <button class="btn-status" onclick="downloadAttendanceRecord('${doc.id}')" title="Download">
+                                    <i class="fas fa-download"></i>
+                                    <span>Download</span>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    
+                    tbody.appendChild(row);
+                });
+            })
+            .catch((error) => {
+                console.error('Error loading attendance:', error);
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="7" style="text-align: center; padding: 2rem;">
-                            <i class="fas fa-clipboard-check" style="font-size: 2rem; color: var(--gray-400); margin-bottom: 1rem; display: block;"></i>
-                            <p style="color: var(--gray-500);">No attendance records found</p>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                            <p>Error loading attendance records. Please try again.</p>
+                            <button class="btn btn-primary" onclick="loadAllAttendance()" style="margin-top: 1rem;">
+                                <i class="fas fa-refresh"></i> Retry
+                            </button>
                         </td>
                     </tr>
                 `;
-                return;
-            }
-            
-            querySnapshot.forEach((doc) => {
-                const data = {
-                    id: doc.id,
-                    ...doc.data()
-                };
-                allAttendance.push(data);
-                
-                const row = document.createElement('tr');
-                
-                // Use getStudentEmail function to get the email
-                const studentEmail = getStudentEmail(data.studentId, data.studentEmail);
-                
-                row.innerHTML = `
-                    <td>${data.studentName || 'Unknown'}</td>
-                    <td>${studentEmail}</td>
-                    <td>${new Date(data.timestamp.toDate()).toLocaleDateString()}</td>
-                    <td>${new Date(data.timestamp.toDate()).toLocaleTimeString()}</td>
-                    <td><span class="status-badge ${data.status}">${data.status}</span></td>
-                    <td>${data.approvedBy || '-'}</td>
-                    <td>
-                        <div class="attendance-actions">
-                            <button class="btn-status edit" onclick="editAttendance('${doc.id}')" title="Edit Status">
-                                <i class="fas fa-edit"></i>
-                                <span>Edit</span>
-                            </button>
-                            <button class="btn-status" onclick="downloadAttendanceRecord('${doc.id}')" title="Download">
-                                <i class="fas fa-download"></i>
-                                <span>Download</span>
-                            </button>
-                        </div>
-                    </td>
-                `;
-                
-                tbody.appendChild(row);
+                showToast('Error loading attendance records.', 'error');
             });
-        })
-        .catch((error) => {
-            console.error('Error loading attendance:', error);
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
-                        <p>Error loading attendance records. Please try again.</p>
-                        <button class="btn btn-primary" onclick="loadAllAttendance()" style="margin-top: 1rem;">
-                            <i class="fas fa-refresh"></i> Retry
-                        </button>
-                    </td>
-                </tr>
-            `;
-            showToast('Error loading attendance records.', 'error');
-        });
+    }).catch((error) => {
+        console.error('Error loading students for attendance:', error);
+        showToast('Error loading student data.', 'error');
+    });
 }
 
 // Filter attendance
