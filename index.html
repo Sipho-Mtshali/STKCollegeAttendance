@@ -3,205 +3,472 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="STKLogo.png">
-    <title>Setup Admin - STKCollege</title>
-    <link rel="stylesheet" href="index.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>STK College - Loading</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Blue animated gradient background */
+        #preloader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, 
+                #1a2980 0%, 
+                #26d0ce 25%, 
+                #1a2980 50%, 
+                #26d0ce 75%, 
+                #1a2980 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 8s ease infinite;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Floating particles */
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: float 6s infinite ease-in-out;
+        }
+
+        .particle:nth-child(1) { width: 20px; height: 20px; top: 20%; left: 20%; animation-delay: 0s; }
+        .particle:nth-child(2) { width: 30px; height: 30px; top: 80%; left: 80%; animation-delay: -2s; }
+        .particle:nth-child(3) { width: 15px; height: 15px; top: 40%; left: 70%; animation-delay: -4s; }
+        .particle:nth-child(4) { width: 25px; height: 25px; top: 70%; left: 30%; animation-delay: -1s; }
+        .particle:nth-child(5) { width: 18px; height: 18px; top: 60%; left: 10%; animation-delay: -3s; }
+        .particle:nth-child(6) { width: 22px; height: 22px; top: 10%; left: 60%; animation-delay: -5s; }
+
+        /* Logo container with glassmorphism */
+        .logo-container {
+            position: relative;
+            width: 160px;
+            height: 160px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 3rem;
+            animation: logoFloat 3s ease-in-out infinite alternate;
+            box-shadow: 
+                0 25px 50px -12px rgba(0, 0, 0, 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .logo-container::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #3498db, #2980b9, #1a5276, #2c3e50);
+            border-radius: 50%;
+            z-index: -1;
+            animation: borderGlow 3s linear infinite;
+        }
+
+        .preloader-logo {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            overflow: hidden;
+            /* Removed the spinning animation */
+        }
+
+        .preloader-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Modern spinner with multiple rings */
+        .spinner-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            margin-bottom: 2rem;
+        }
+
+        .spinner-ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 3px solid transparent;
+        }
+
+        .spinner-ring:nth-child(1) {
+            width: 120px;
+            height: 120px;
+            border-top: 3px solid rgba(255, 255, 255, 0.8);
+            animation: spin 1.5s linear infinite;
+        }
+
+        .spinner-ring:nth-child(2) {
+            width: 90px;
+            height: 90px;
+            top: 15px;
+            left: 15px;
+            border-right: 3px solid rgba(255, 255, 255, 0.6);
+            animation: spin 2s linear infinite reverse;
+        }
+
+        .spinner-ring:nth-child(3) {
+            width: 60px;
+            height: 60px;
+            top: 30px;
+            left: 30px;
+            border-bottom: 3px solid rgba(255, 255, 255, 0.4);
+            animation: spin 1s linear infinite;
+        }
+
+        /* Enhanced text styling */
+        .preloader-text {
+            color: white;
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-align: center;
+            margin-bottom: 0.5rem;
+            animation: textGlow 2s ease-in-out infinite alternate;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            background: linear-gradient(45deg, #fff, #f0f0f0, #fff);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-size: 200% 200%;
+            animation: textShimmer 3s ease-in-out infinite;
+        }
+
+        .preloader-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1rem;
+            font-weight: 400;
+            letter-spacing: 1px;
+            text-align: center;
+            margin-bottom: 3rem;
+            opacity: 0;
+            animation: fadeInUp 1s ease 0.5s forwards;
+        }
+
+        /* Modern progress bar */
+        .progress-container {
+            width: 300px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            backdrop-filter: blur(10px);
+            margin-bottom: 1rem;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #3498db, #2980b9, #1a5276);
+            background-size: 200% 100%;
+            border-radius: 10px;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: progressGlow 2s ease-in-out infinite;
+            position: relative;
+        }
+
+        .progress-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: progressShine 2s infinite;
+        }
+
+        .progress-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        /* Loading dots */
+        .loading-dots {
+            display: flex;
+            gap: 8px;
+            margin-top: 1rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            animation: dotPulse 1.4s ease-in-out infinite both;
+        }
+
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+        .dot:nth-child(3) { animation-delay: 0s; }
+
+        /* Hide preloader when loaded */
+        .loaded #preloader {
+            opacity: 0;
+            transform: scale(1.1);
+            pointer-events: none;
+        }
+
+        /* Keyframe animations */
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            33% { transform: translateY(-20px) rotate(120deg); }
+            66% { transform: translateY(-10px) rotate(240deg); }
+        }
+
+        @keyframes logoFloat {
+            0% { transform: translateY(0px) scale(1); }
+            100% { transform: translateY(-20px) scale(1.05); }
+        }
+
+        /* Removed logoSpin animation */
+
+        @keyframes borderGlow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes textShimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes textGlow {
+            0% { text-shadow: 0 0 20px rgba(255, 255, 255, 0.3); }
+            100% { text-shadow: 0 0 30px rgba(255, 255, 255, 0.6), 0 0 40px rgba(255, 255, 255, 0.3); }
+        }
+
+        @keyframes fadeInUp {
+            0% {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes progressGlow {
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 30px rgba(255, 255, 255, 0.3); }
+        }
+
+        @keyframes progressShine {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        @keyframes dotPulse {
+            0%, 80%, 100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .logo-container {
+                width: 120px;
+                height: 120px;
+                margin-bottom: 2rem;
+            }
+
+            .preloader-logo {
+                width: 80px;
+                height: 80px;
+            }
+
+            .preloader-text {
+                font-size: 1.5rem;
+                letter-spacing: 1px;
+            }
+
+            .progress-container {
+                width: 250px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <div class="login-card" style="max-width: 500px; margin: 0 auto;">
-            <div class="logo-section">
-                <div class="logo">
-                    <img src="STKLogo.png" alt="STK College Logo">
-                </div>
-                <h1>Setup Admin Account</h1>
-                <p>Create your admin account to get started</p>
+    <!-- Preloader -->
+    <div id="preloader">
+        <!-- Floating particles -->
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+
+        <!-- Logo with glassmorphism effect -->
+        <div class="logo-container">
+            <div class="preloader-logo">
+                <img src="STKLogo.png" alt="STK College Logo">
             </div>
+        </div>
 
-            <form id="setupForm" class="login-form">
-                <div class="input-group">
-                    <i class="fas fa-user"></i>
-                    <input type="text" id="adminName" placeholder="Enter admin name" required>
-                </div>
+        <!-- Multi-ring spinner -->
+        <div class="spinner-container">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+        </div>
 
-                <div class="input-group">
-                    <i class="fas fa-envelope"></i>
-                    <input type="email" id="adminEmail" placeholder="Enter admin email" required>
-                </div>
-                
-                <div class="input-group">
-                    <i class="fas fa-lock"></i>
-                    <input type="password" id="adminPassword" placeholder="Create password (min 6 chars)" required minlength="6">
-                    <i class="fas fa-eye toggle-password" onclick="toggleSetupPassword()"></i>
-                </div>
+        <!-- Enhanced text -->
+        <div class="preloader-text">STK COLLEGE</div>
+        <div class="preloader-subtitle">Excellence in Education</div>
 
-                <button type="submit" class="login-btn">
-                    <span class="btn-text">Create Admin Account</span>
-                    <i class="fas fa-user-plus"></i>
-                </button>
-            </form>
+        <!-- Modern progress bar -->
+        <div class="progress-container">
+            <div class="progress-bar"></div>
+        </div>
+        <div class="progress-text">Loading System...</div>
 
-            <div class="loading-spinner" id="loadingSpinner">
-                <div class="spinner"></div>
-                <p>Creating admin account...</p>
-            </div>
-
-            <div class="error-message" id="errorMessage"></div>
-            
-            <div class="success-message" id="successMessage" style="display: none; background: #d4edda; color: #155724; padding: 12px 16px; border-radius: 8px; margin-top: 16px; border-left: 4px solid #28a745;">
-                <i class="fas fa-check-circle"></i>
-                <span>Admin account created successfully! Redirecting to login...</span>
-            </div>
-
-            <div style="margin-top: 20px; padding: 15px; background: rgba(255, 138, 0, 0.1); border-radius: 8px; border-left: 4px solid #ff8a00;">
-                <h4 style="margin: 0 0 10px 0; color: #ff8a00;">
-                    <i class="fas fa-info-circle"></i> Instructions:
-                </h4>
-                <ul style="margin: 0; padding-left: 20px; color: #666; font-size: 14px;">
-                    <li>This will create your admin account</li>
-                    <li>Use this account to login and add students</li>
-                    <li>You can delete this setup page after creating admin</li>
-                    <li>Make sure Firebase is properly configured</li>
-                </ul>
-            </div>
+        <!-- Loading dots -->
+        <div class="loading-dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
-    
-    <script src="firebase-config.js"></script>
-    
     <script>
-        function toggleSetupPassword() {
-            const passwordInput = document.getElementById('adminPassword');
-            const toggleIcon = document.querySelector('.toggle-password');
+        document.addEventListener('DOMContentLoaded', function() {
+            const preloader = document.getElementById('preloader');
+            const progressBar = document.querySelector('.progress-bar');
+            const progressText = document.querySelector('.progress-text');
+            let progress = 0;
             
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                toggleIcon.classList.remove('fa-eye');
-                toggleIcon.classList.add('fa-eye-slash');
-            } else {
-                passwordInput.type = 'password';
-                toggleIcon.classList.remove('fa-eye-slash');
-                toggleIcon.classList.add('fa-eye');
-            }
-        }
-
-        function showLoading(show = true) {
-            const form = document.getElementById('setupForm');
-            const spinner = document.getElementById('loadingSpinner');
+            const loadingMessages = [
+                'Initializing System...',
+                'Loading Modules...',
+                'Connecting Database...',
+                'Preparing Interface...',
+                'Optimizing Performance...',
+                'Finalizing Setup...',
+                'Almost Ready...',
+                'Welcome to STK College!'
+            ];
             
-            if (show) {
-                form.style.display = 'none';
-                spinner.style.display = 'block';
-            } else {
-                form.style.display = 'flex';
-                spinner.style.display = 'none';
-            }
-        }
-
-        function showError(message) {
-            const errorDiv = document.getElementById('errorMessage');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
+            let messageIndex = 0;
             
-            setTimeout(() => {
-                errorDiv.style.display = 'none';
-            }, 8000);
-        }
-
-        function showSuccess() {
-            const successDiv = document.getElementById('successMessage');
-            successDiv.style.display = 'block';
-        }
-
-        document.getElementById('setupForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const name = document.getElementById('adminName').value.trim();
-            const email = document.getElementById('adminEmail').value.trim();
-            const password = document.getElementById('adminPassword').value;
-            
-            if (!name || !email || !password) {
-                showError('Please fill all fields');
-                return;
-            }
-
-            if (password.length < 6) {
-                showError('Password must be at least 6 characters');
-                return;
-            }
-            
-            showLoading(true);
-            
-            try {
-                // Create admin user
-                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-                const user = userCredential.user;
+            // Simulate realistic loading progress
+            const interval = setInterval(() => {
+                // Variable loading speed for realism
+                const increment = Math.random() * 12 + 3;
+                progress += increment;
                 
-                // Add user data to Firestore
-                await db.collection('users').doc(user.uid).set({
-                    email: email,
-                    name: name,
-                    role: 'admin',
-                    isAdmin: true,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                showLoading(false);
-                showSuccess();
-                
-                // Redirect to login page after 3 seconds
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 3000);
-                
-            } catch (error) {
-                showLoading(false);
-                console.error('Error creating admin:', error);
-                
-                let errorMessage = 'Failed to create admin account';
-                
-                switch (error.code) {
-                    case 'auth/email-already-in-use':
-                        errorMessage = 'Email is already registered. Try logging in instead.';
-                        break;
-                    case 'auth/weak-password':
-                        errorMessage = 'Password is too weak. Use at least 6 characters.';
-                        break;
-                    case 'auth/invalid-email':
-                        errorMessage = 'Invalid email address format';
-                        break;
-                    case 'auth/operation-not-allowed':
-                        errorMessage = 'Email/password authentication is not enabled in Firebase';
-                        break;
-                    default:
-                        errorMessage = error.message;
-                }
-                
-                showError(errorMessage);
-            }
-        });
-
-        // Check if admin already exists
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                // Check if user is admin
-                try {
-                    const userDoc = await db.collection('users').doc(user.uid).get();
-                    if (userDoc.exists && userDoc.data().role === 'admin') {
-                        // Admin already exists, redirect to admin dashboard
-                        window.location.href = 'admin.html';
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    
+                    progressText.textContent = loadingMessages[loadingMessages.length - 1];
+                    
+                    // Add loaded class to body to trigger fade out
+                    setTimeout(() => {
+                        document.body.classList.add('loaded');
+                    }, 800);
+                    
+                    // Redirect to login page after fade out completes
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 1300);
+                } else {
+                    // Update loading message based on progress
+                    const currentMessageIndex = Math.floor((progress / 100) * (loadingMessages.length - 1));
+                    if (currentMessageIndex !== messageIndex && currentMessageIndex < loadingMessages.length - 1) {
+                        messageIndex = currentMessageIndex;
+                        progressText.textContent = loadingMessages[messageIndex];
                     }
-                } catch (error) {
-                    console.error('Error checking user:', error);
                 }
+                
+                progressBar.style.width = progress + '%';
+            }, Math.random() * 200 + 150); // Random interval between 150-350ms
+            
+            // Add some interactive particle effects on mouse move
+            document.addEventListener('mousemove', (e) => {
+                if (Math.random() > 0.9) { // Only occasionally create particles
+                    createMouseParticle(e.clientX, e.clientY);
+                }
+            });
+            
+            function createMouseParticle(x, y) {
+                const particle = document.createElement('div');
+                particle.style.position = 'absolute';
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                particle.style.width = '4px';
+                particle.style.height = '4px';
+                particle.style.background = 'rgba(255, 255, 255, 0.6)';
+                particle.style.borderRadius = '50%';
+                particle.style.pointerEvents = 'none';
+                particle.style.zIndex = '10000';
+                particle.style.animation = 'fadeOut 1s ease-out forwards';
+                
+                document.body.appendChild(particle);
+                
+                setTimeout(() => {
+                    particle.remove();
+                }, 1000);
             }
+            
+            // Add fadeOut animation for mouse particles
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes fadeOut {
+                    0% { opacity: 1; transform: scale(1) translateY(0); }
+                    100% { opacity: 0; transform: scale(0) translateY(-20px); }
+                }
+            `;
+            document.head.appendChild(style);
         });
     </script>
 </body>
