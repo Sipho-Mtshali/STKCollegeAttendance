@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="student.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <!-- Toast Container -->
@@ -73,56 +74,26 @@
                     <h1>Student Dashboard</h1>
                     <p>Welcome back! Here's your attendance summary.</p>
                 </div>
-<!-- In the header section of student.html -->
-<div class="user-menu">
-    <div class="user-info" onclick="showProfileModal()" style="cursor: pointer;">
-        <img src="https://ui-avatars.com/api/?name=Student+User&background=4f46e5&color=fff" alt="Student User">
-        <div>
-            <div id="userNameDisplay">Student User</div>
-            <small>Student</small>
-        </div>
-    </div>
-    <button class="logout-btn" onclick="logout()">
-        <i class="fas fa-sign-out-alt"></i>
-        Logout
-    </button>
-</div>
 
-<!-- Add this modal at the end of the body, before the Chart.js script -->
-<div id="profileModal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Edit Profile</h2>
-            <span class="close" onclick="closeProfileModal()">&times;</span>
-        </div>
-        <div class="modal-body">
-            <form id="profileForm">
-                <div class="form-group">
-                    <label for="profileName">Full Name</label>
-                    <input type="text" id="profileName" class="form-control" required>
+                <div class="user-menu">
+                    <div class="user-info" onclick="showProfileModal()" style="cursor: pointer;">
+                        <img src="https://ui-avatars.com/api/?name=Student+User&background=4f46e5&color=fff" alt="Student User">
+                        <div>
+                            <div id="userNameDisplay">Student User</div>
+                            <small>Student</small>
+                        </div>
+                    </div>
+                    <button class="logout-btn" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Logout
+                    </button>
                 </div>
-                <div class="form-group">
-                    <label for="profilePassword">New Password (leave blank to keep current)</label>
-                    <input type="password" id="profilePassword" class="form-control" placeholder="Enter new password">
-                </div>
-                <div class="form-group">
-                    <label for="profileConfirmPassword">Confirm New Password</label>
-                    <input type="password" id="profileConfirmPassword" class="form-control" placeholder="Confirm new password">
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
             </header>
 
             <!-- Dashboard Section -->
             <div id="dashboardSection">
-                <!-- Stats Grid -->
-                <div class="stats-grid" id="statsSection">
+                <!-- Dashboard Stats Cards -->
+                <div class="stats-grid" id="dashboardStatsGrid">
                     <div class="stat-card">
                         <div class="stat-icon blue">
                             <i class="fas fa-calendar-check"></i>
@@ -161,7 +132,7 @@
                     </div>
                 </div>
 
-                <!-- Content Grid -->
+                <!-- Other dashboard content -->
                 <div class="content-grid">
                     <!-- Attendance History -->
                     <div class="card">
@@ -179,9 +150,7 @@
                                         <th>Approved By</th>
                                     </tr>
                                 </thead>
-                                <tbody id="recentAttendanceTableBody">
-                                    <!-- Recent attendance data will be populated here -->
-                                </tbody>
+                                <tbody id="recentAttendanceTableBody"></tbody>
                             </table>
                         </div>
                     </div>
@@ -192,31 +161,22 @@
                             <h2>Recent Activity</h2>
                         </div>
                         <div class="card-body">
-                            <ul class="activity-list" id="activityList">
-                                <!-- Activity data will be populated here -->
-                            </ul>
+                            <ul class="activity-list" id="activityList"></ul>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Attendance Marking Section -->
+            <!-- Attendance Section -->
             <div class="attendance-marking" id="attendanceSection" style="display: none;">
                 <h2><i class="fas fa-hand-paper"></i> Mark Today's Attendance</h2>
                 <p>Mark your attendance for today. Your teacher will verify your physical presence in class.</p>
-                
                 <button id="markAttendanceBtn" class="btn btn-primary" onclick="markAttendance()">
                     <i class="fas fa-check-circle"></i>
                     Mark Me Present Today
                 </button>
-                
-                <div id="attendanceStatus" class="attendance-status" style="display: none;">
-                    <!-- Status will be displayed here -->
-                </div>
-                
-                <div id="todayStatus" style="margin-top: 1rem; font-weight: 500;">
-                    <!-- Today's status will be shown here -->
-                </div>
+                <div id="attendanceStatus" class="attendance-status" style="display: none;"></div>
+                <div id="todayStatus" style="margin-top: 1rem; font-weight: 500;"></div>
             </div>
 
             <!-- Attendance History Section -->
@@ -245,9 +205,7 @@
                                     <th>Comment</th>
                                 </tr>
                             </thead>
-                            <tbody id="attendanceTableBody">
-                                <!-- Attendance data will be populated here -->
-                            </tbody>
+                            <tbody id="attendanceTableBody"></tbody>
                         </table>
                     </div>
                 </div>
@@ -255,118 +213,92 @@
 
             <!-- Statistics Section -->
             <div id="statsSection" style="display: none;">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Attendance Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon blue">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="statsTotalDays">0</h3>
+                            <p>Total Days</p>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <div class="stat-icon blue">
-                                    <i class="fas fa-calendar-check"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <h3 id="statsTotalDays">0</h3>
-                                    <p>Total Days</p>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon green">
-                                    <i class="fas fa-check-circle"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <h3 id="statsPresentDays">0</h3>
-                                    <p>Present Days</p>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon orange">
-                                    <i class="fas fa-clock"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <h3 id="statsPendingDays">0</h3>
-                                    <p>Pending Approval</p>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon red">
-                                    <i class="fas fa-times-circle"></i>
-                                </div>
-                                <div class="stat-info">
-                                    <h3 id="statsAbsentDays">0</h3>
-                                    <p>Absent Days</p>
-                                </div>
-                            </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green">
+                            <i class="fas fa-check-circle"></i>
                         </div>
-                        
-                        <div class="statistics-container">
-                            <div class="streak-counter">
-                                <i class="fas fa-fire"></i>
-                                <div class="streak-info">
-                                    <h3 id="currentStreak">0 days</h3>
-                                    <p>Current attendance streak</p>
-                                </div>
-                            </div>
-                            
-                            <div class="stat-row">
-                                <div class="stat-chart">
-                                    <h3>Attendance Rate</h3>
-                                    <div class="attendance-rate-bar">
-                                        <div id="attendanceRateBar" class="attendance-rate-fill">0%</div>
-                                    </div>
-                                    <p id="attendanceRateText">0% attendance rate</p>
-                                </div>
-                                
-                                <div class="stat-chart">
-                                    <h3>Status Distribution</h3>
-                                    <div class="chart-container">
-                                        <canvas id="statusChart" width="200" height="200"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="monthly-stats">
-                                <h3>Monthly Overview</h3>
-                                <div class="monthly-grid" id="monthlyGrid">
-                                    <!-- Monthly stats will be populated here -->
-                                </div>
-                            </div>
+                        <div class="stat-info">
+                            <h3 id="statsPresentDays">0</h3>
+                            <p>Present Days</p>
                         </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orange">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="statsPendingDays">0</h3>
+                            <p>Pending Approval</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon red">
+                            <i class="fas fa-times-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="statsAbsentDays">0</h3>
+                            <p>Absent Days</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Streak & Chart -->
+                <div class="streak-counter">
+                    <i class="fas fa-fire"></i>
+                    <div class="streak-info">
+                        <h3 id="currentStreak">0 days</h3>
+                        <p>Current attendance streak</p>
+                    </div>
+                </div>
+
+                <div class="stat-chart">
+                    <h3>Status Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="statusChart" width="200" height="200"></canvas>
                     </div>
                 </div>
             </div>
         </main>
     </div>
-    <!-- Add this modal at the end of the body, before the Chart.js script -->
-<div id="profileModal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Edit Profile</h2>
-            <span class="close" onclick="closeProfileModal()">&times;</span>
-        </div>
-        <div class="modal-body">
-            <form id="profileForm">
-                <div class="form-group">
-                    <label for="profileName">Full Name</label>
-                    <input type="text" id="profileName" class="form-control" required>
-                </div>
-                <div class="form-group">
-                    <label for="profilePassword">New Password (leave blank to keep current)</label>
-                    <input type="password" id="profilePassword" class="form-control" placeholder="Enter new password">
-                </div>
-                <div class="form-group">
-                    <label for="profileConfirmPassword">Confirm New Password</label>
-                    <input type="password" id="profileConfirmPassword" class="form-control" placeholder="Confirm new password">
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Profile</h2>
+                <span class="close" onclick="closeProfileModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="profileForm">
+                    <div class="form-group">
+                        <label for="profileName">Full Name</label>
+                        <input type="text" id="profileName" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="profilePassword">New Password (leave blank to keep current)</label>
+                        <input type="password" id="profilePassword" class="form-control" placeholder="Enter new password">
+                    </div>
+                    <div class="form-group">
+                        <label for="profileConfirmPassword">Confirm New Password</label>
+                        <input type="password" id="profileConfirmPassword" class="form-control" placeholder="Confirm new password">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
-    <!-- Chart.js for statistics -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>
 </html>
