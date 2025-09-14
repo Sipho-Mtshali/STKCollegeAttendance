@@ -35,7 +35,6 @@ auth.onAuthStateChanged((user) => {
     }
 });
 // Setup navigation
-// Setup navigation
 function setupNavigation() {
     // Add click event listeners to all nav links
     const navLinks = document.querySelectorAll('.nav-link');
@@ -238,57 +237,36 @@ function setupMobileMenu() {
 // Show specific section
 function showSection(section) {
     const sections = ['dashboardSection', 'attendanceSection', 'historySection', 'statsSection'];
+
     sections.forEach(sec => {
         const element = document.getElementById(sec);
         if (element) element.style.display = 'none';
     });
 
-    switch(section) {
-        case 'dashboard':
-            const dashboardSection = document.getElementById('dashboardSection');
-            if (dashboardSection) {
-                dashboardSection.style.display = 'block';
-                const statsGrid = document.querySelector('.stats-grid');
-                if (statsGrid) statsGrid.style.display = 'grid';
-                const contentGrid = document.querySelector('.content-grid');
-                if (contentGrid) contentGrid.style.display = 'grid';
-            }
-            updateNavActive('dashboard');
-            break;
-        case 'attendance':
-            const attendanceSection = document.getElementById('attendanceSection');
-            if (attendanceSection) attendanceSection.style.display = 'block';
-            updateNavActive('attendance');
-            break;
-        case 'history':
-            const historySection = document.getElementById('historySection');
-            if (historySection) historySection.style.display = 'block';
-            updateNavActive('history');
-            loadAttendanceHistory();
-            break;
-        case 'stats':
-            const statsSection = document.getElementById('statsSection');
-            if (statsSection) statsSection.style.display = 'block';
-            updateNavActive('stats');
-            // Ensure chart is updated when switching to stats section
-            setTimeout(() => {
-                updateStatistics();
-            }, 100);
-            break;
-    }
+    const target = document.getElementById(section + 'Section');
+    if (target) target.style.display = 'block';
 
+    // Update nav
+    updateNavActive(section);
+
+    // Mobile sidebar behavior
     if (window.innerWidth <= 768) {
         const sidebar = document.getElementById('sidebar');
         if (sidebar) sidebar.classList.remove('open');
     }
+
+    // Load section-specific data
+    if (section === 'history') loadAttendanceHistory();
+    if (section === 'stats') setTimeout(() => updateStatistics(), 100);
 }
+
 
 // Update nav active state
 function updateNavActive(section) {
     const navLinks = document.querySelectorAll('.nav-link');
     navLinks.forEach(link => link.classList.remove('active'));
 
-    const activeLink = document.querySelector(`.nav-link[onclick="showSection('${section}')"]`);
+    const activeLink = document.querySelector(`.nav-link[data-section="${section}"]`);
     if (activeLink) activeLink.classList.add('active');
 }
 
@@ -954,15 +932,15 @@ function toggleSidebar() {
 }
 
 // Close sidebar when clicking outside on mobile
-document.addEventListener('click', function(event) {
-    const sidebar = document.querySelector('.sidebar');
-    const menuToggle = document.querySelector('.menu-toggle');
-    
-    if (window.innerWidth <= 992 && 
-        sidebar.classList.contains('open') && 
-        !sidebar.contains(event.target) && 
-        !menuToggle.contains(event.target)) {
-        sidebar.classList.remove('open');
+document.addEventListener('click', function(e) {
+    const historySection = document.getElementById('historySection');
+    const historyLink = document.querySelector('.nav-link[data-section="history"]');
+
+    if (historySection && historySection.style.display === 'block') {
+        if (!historySection.contains(e.target) && !historyLink.contains(e.target)) {
+            historySection.style.display = 'none';
+            if (historyLink) historyLink.classList.remove('active');
+        }
     }
 });
 
