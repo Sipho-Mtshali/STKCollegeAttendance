@@ -843,3 +843,31 @@ window.onload = function() {
     document.getElementById('startDate').value = today;
     document.getElementById('endDate').value = today;
 };
+// Toggle sidebar on mobile
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// Close sidebar when clicking outside on mobile
+document.addEventListener('click', function(event) {
+    const sidebar = document.querySelector('.sidebar');
+    const menuToggle = document.querySelector('.menu-toggle');
+    
+    if (window.innerWidth <= 992 && 
+        sidebar.classList.contains('open') && 
+        !sidebar.contains(event.target) && 
+        !menuToggle.contains(event.target)) {
+        sidebar.classList.remove('open');
+    }
+});
+
+// Close sidebar when a nav link is clicked on mobile
+document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', function() {
+        if (window.innerWidth <= 992) {
+            const sidebar = document.querySelector('.sidebar');
+            sidebar.classList.remove('open');
+        }
+    });
+});
