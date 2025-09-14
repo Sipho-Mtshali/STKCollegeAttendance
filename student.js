@@ -20,6 +20,7 @@ let studentData = null;
 let todayAttendance = null;
 let allAttendanceRecords = [];
 let markBtn = null;
+let statusChart = null; // Add chart instance variable
 
 // Check authentication state
 auth.onAuthStateChanged((user) => {
@@ -231,7 +232,10 @@ function showSection(section) {
             const statsSection = document.getElementById('statsSection');
             if (statsSection) statsSection.style.display = 'block';
             updateNavActive('stats');
-            updateStatistics();
+            // Ensure chart is updated when switching to stats section
+            setTimeout(() => {
+                updateStatistics();
+            }, 100);
             break;
     }
 
@@ -307,11 +311,17 @@ function loadDashboardData() {
             const attendanceRateBar = document.getElementById('attendanceRateBar');
             const attendanceRateText = document.getElementById('attendanceRateText');
             
-            if (attendanceRateBar) attendanceRateBar.style.width = `${attendanceRate}%`;
+            if (attendanceRateBar) {
+                attendanceRateBar.style.width = `${attendanceRate}%`;
+                attendanceRateBar.textContent = `${attendanceRate}%`;
+            }
             if (attendanceRateText) attendanceRateText.textContent = `${attendanceRate}% attendance rate`;
 
             updateTodayStatus();
             loadRecentAttendance();
+            
+            // FIX 2: Update the status chart with current data
+            updateStatusChart(presentDays, pendingDays, absentDays);
         })
         .catch((error) => {
             console.error('Error loading attendance data:', error);
@@ -319,6 +329,74 @@ function loadDashboardData() {
         });
 
     loadRecentActivity();
+}
+
+// FIX 2: Create and update status chart properly
+function updateStatusChart(approved, pending, rejected) {
+    const ctx = document.getElementById('statusChart');
+    if (!ctx) return;
+
+    // Destroy existing chart if it exists
+    if (statusChart) {
+        statusChart.destroy();
+    }
+
+    // Only create chart if there's data to display
+    const hasData = approved > 0 || pending > 0 || rejected > 0;
+    
+    if (!hasData) {
+        ctx.style.display = 'none';
+        const parent = ctx.parentElement;
+        if (parent) {
+            let noDataMsg = parent.querySelector('.no-data-message');
+            if (!noDataMsg) {
+                noDataMsg = document.createElement('div');
+                noDataMsg.className = 'no-data-message';
+                noDataMsg.innerHTML = '<p style="text-align: center; color: #666; margin-top: 50px;">No attendance data yet</p>';
+                parent.appendChild(noDataMsg);
+            }
+        }
+        return;
+    }
+
+    ctx.style.display = 'block';
+    const parent = ctx.parentElement;
+    if (parent) {
+        const noDataMsg = parent.querySelector('.no-data-message');
+        if (noDataMsg) noDataMsg.remove();
+    }
+
+    statusChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Approved', 'Pending', 'Rejected'],
+            datasets: [{
+                data: [approved, pending, rejected],
+                backgroundColor: [
+                    '#10b981', // Green for approved
+                    '#f59e0b', // Orange for pending  
+                    '#ef4444'  // Red for rejected
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true,
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 // Update today's attendance status
@@ -346,7 +424,9 @@ function updateTodayStatus() {
                 statusClass = 'approved';
                 break;
             case 'rejected':
-                statusText = `Your attendance for today was rejected. ${todayAttendance.remarks ? 'Reason: ' + todayAttendance.remarks : 'Please contact your teacher.'}`;
+                // FIX 3: Show admin comments correctly - check multiple possible field names
+                const comment = todayAttendance.remarks || todayAttendance.comment || todayAttendance.notes || '';
+                statusText = `Your attendance for today was rejected.${comment ? ' Reason: ' + comment : ' Please contact your teacher.'}`;
                 statusClass = 'rejected';
                 break;
         }
@@ -497,20 +577,27 @@ function loadAttendanceHistory() {
         const date = new Date(record.date);
         const formattedDate = date.toLocaleDateString();
         const formattedTime = record.timestamp ? record.timestamp.toDate().toLocaleTimeString() : 'N/A';
-        // Show notes/remarks as comment, especially for rejected attendance
-        const comment = record.status === 'rejected' ? (record.notes || 'No comment provided') : 'N/A';
+        
+        // FIX 3: Display admin comments correctly - check multiple possible field names and only show N/A if truly no comment
+        let comment = 'N/A';
+        if (record.status === 'rejected' || record.status === 'approved') {
+            const adminComment = record.remarks || record.comment || record.notes || '';
+            if (adminComment && adminComment.trim() !== '') {
+                comment = adminComment.trim();
+            }
+        }
+        
         row.innerHTML = `
             <td>${formattedDate}</td>
             <td>${formattedTime}</td>
             <td><span class="status-badge ${record.status}">${record.status}</span></td>
             <td>${record.approvedBy || 'N/A'}</td>
-            <td>${comment || 'N/A'}</td>
+            <td>${comment}</td>
         `;
         
         tableBody.appendChild(row);
     });
 }
-
 
 // Filter attendance history
 function filterAttendance() {
@@ -524,8 +611,7 @@ function updateStatistics() {
     loadDashboardData();
 }
 
-// Load recent activity
-// Load recent activity - Only show activities related to this student
+// FIX 1: Load recent activity with duplicate prevention
 function loadRecentActivity() {
     const activityList = document.getElementById('activityList');
     if (!activityList) return;
@@ -538,7 +624,7 @@ function loadRecentActivity() {
     
     db.collection('activities')
         .orderBy('timestamp', 'desc')
-        .limit(5)
+        .limit(20) // Get more records to filter duplicates
         .get()
         .then((querySnapshot) => {
             if (querySnapshot.empty) {
@@ -546,11 +632,39 @@ function loadRecentActivity() {
                 return;
             }
 
+            // FIX 1: Use a Set to track unique activities and prevent duplicates
+            const uniqueActivities = new Map();
+            const studentRelatedActivities = [];
+
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
                 
                 // Only show activities that mention this student specifically
                 if (data.message && data.message.includes(studentName)) {
+                    // Create a unique key based on message content and date
+                    const activityDate = data.timestamp ? data.timestamp.toDate().toDateString() : 'No Date';
+                    const uniqueKey = `${data.message}-${activityDate}`;
+                    
+                    // Only add if we haven't seen this exact activity before
+                    if (!uniqueActivities.has(uniqueKey)) {
+                        uniqueActivities.set(uniqueKey, true);
+                        studentRelatedActivities.push({
+                            id: doc.id,
+                            ...data
+                        });
+                    }
+                }
+            });
+
+            // Sort by timestamp and limit to 5 most recent unique activities
+            studentRelatedActivities
+                .sort((a, b) => {
+                    const timeA = a.timestamp ? a.timestamp.toDate() : new Date(0);
+                    const timeB = b.timestamp ? b.timestamp.toDate() : new Date(0);
+                    return timeB - timeA;
+                })
+                .slice(0, 5)
+                .forEach((data) => {
                     const item = document.createElement('li');
                     item.className = 'activity-item';
                     
@@ -567,8 +681,7 @@ function loadRecentActivity() {
                     `;
                     
                     activityList.appendChild(item);
-                }
-            });
+                });
 
             // If no activities were added, show message
             if (activityList.children.length === 0) {
@@ -597,8 +710,13 @@ function setupRealtimeListeners() {
                         const oldData = change.doc._previousData || {};
                         if (newData.status !== oldData.status) {
                             let message = '';
-                            if (newData.status === 'approved') message = `Your attendance for ${newData.date} has been approved!`;
-                            else if (newData.status === 'rejected') message = `Your attendance for ${newData.date} was rejected. ${newData.remarks ? 'Reason: ' + newData.remarks : ''}`;
+                            if (newData.status === 'approved') {
+                                message = `Your attendance for ${newData.date} has been approved!`;
+                            } else if (newData.status === 'rejected') {
+                                // FIX 3: Include admin comment in notification
+                                const comment = newData.remarks || newData.comment || newData.notes || '';
+                                message = `Your attendance for ${newData.date} was rejected.${comment ? ' Reason: ' + comment : ''}`;
+                            }
                             if (message) showToast(message, newData.status === 'approved' ? 'success' : 'error');
                         }
                     }
@@ -611,7 +729,7 @@ function setupRealtimeListeners() {
     // Listen for activity changes
     db.collection('activities')
         .orderBy('timestamp', 'desc')
-        .limit(5)
+        .limit(20)
         .onSnapshot((snapshot) => {
             loadRecentActivity();
         }, (error) => {
@@ -657,12 +775,6 @@ function initMarkAttendanceButton() {
     }
 }
 
-// Call this function when the DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    initMarkAttendanceButton();
-    setupMobileMenu();
-    showSection('dashboard');
-});
 // Show profile modal
 function showProfileModal() {
     const modal = document.getElementById('profileModal');
@@ -774,7 +886,7 @@ function updateProfile(name, password) {
         });
 }
 
-// Add event listener for the profile form
+// Call this function when the DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     const profileForm = document.getElementById('profileForm');
     if (profileForm) {
